@@ -38,6 +38,7 @@ export default function AureumStreamAudit() {
         body: formData,
       });
 
+      if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
       if (!response.body) throw new Error("No response body");
 
       const reader = response.body.getReader();
@@ -61,6 +62,9 @@ export default function AureumStreamAudit() {
               if (payload.node === 'END') {
                 setIsProcessing(false);
                 setLogs(prev => [...prev, { node: 'END', msg: '✅ Audit Pipeline Completed.' }]);
+                if (payload.update && payload.update.justification) {
+                  setResult(payload.update);
+                }
                 continue;
               }
 
@@ -167,21 +171,22 @@ export default function AureumStreamAudit() {
               <div ref={logEndRef} />
             </div>
 
-            {result && (
-              <div className="mt-8 p-5 bg-slate-800/50 rounded-xl border border-indigo-500/30 backdrop-blur-sm animate-in zoom-in-95 duration-300">
-                <div className="flex justify-between items-start mb-2">
-                  <h3 className="text-indigo-300 font-bold uppercase text-xs tracking-widest">Audit Summary</h3>
-                  <div className="bg-indigo-500/20 text-indigo-300 px-2 py-1 rounded text-[10px] font-bold">
-                    REQ_MET: {result.req_count}
-                  </div>
-                </div>
-                <p className="text-slate-300 text-sm leading-relaxed italic">
-                  "{result.justification || "Clinical review finalized."}"
-                </p>
-              </div>
-            )}
           </div>
         </div>
+
+        {result && (
+          <div className="bg-slate-900 rounded-2xl p-6 shadow-2xl border-t-4 border-emerald-500 animate-in zoom-in-95 duration-300">
+            <div className="flex justify-between items-start mb-4">
+              <h3 className="text-emerald-400 font-bold uppercase text-xs tracking-widest font-mono"># AUDIT SUMMARY</h3>
+              <div className="bg-emerald-500/20 text-emerald-300 px-3 py-1 rounded-full text-[10px] font-bold font-mono">
+                REQ_MET: {result.req_count}
+              </div>
+            </div>
+            <p className="text-slate-300 text-sm leading-relaxed italic font-mono">
+              &quot;{result.justification || "Clinical review finalized."}&quot;
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

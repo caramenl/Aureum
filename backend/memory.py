@@ -16,7 +16,7 @@ class MoorchehMemoryManager:
 
     def get_semantic_fingerprint(self, text: str) -> List[float]:
         result = self.ai_client.models.embed_content(
-            model="text-embedding-004",
+            model="gemini-embedding-001",
             contents=text[:5000]
         )
         return result.embeddings[0].values
@@ -41,25 +41,11 @@ class MoorchehMemoryManager:
             print(f"[Moorcheh] Semantic Cache error: {e}")
             return None
 
-<<<<<<< HEAD
-    def save_policy_to_cache(self, file_hash: str, requirements: List[AuditRequirement]) -> bool:
-        try:
-            serialized_data = json.dumps([req.model_dump() for req in requirements])
-            payload = {"value": serialized_data}
-            
-            response = requests.post(
-                f"{self.base_url}/{self.policy_namespace}/{file_hash}",
-                headers=self.headers,
-                json=payload
-            )
-            
-            if response.status_code in [200, 201]:
-                print(f"[Moorcheh AI] Saved {len(requirements)} policy rules to cache.")
-                return True
-            return False
-        except Exception as e:
-            print(f"[Moorcheh AI] Error saving to cache: {e}")
-            return False
+    def save_policy_to_cache(self, text: str, requirements: List[AuditRequirement]):
+        vector = self.get_semantic_fingerprint(text)
+        serialized = json.dumps([req.model_dump() for req in requirements])
+        payload = {"value": serialized, "metadata": {"vector": vector}}
+        requests.post(f"{self.base_url}/{self.policy_namespace}", headers=self.headers, json=payload)
 
     def get_patient_history(self, patient_id: str) -> Optional[dict]:
         try:
@@ -119,10 +105,3 @@ class MoorchehMemoryManager:
         except Exception as e:
             print(f"[Moorcheh AI] Error fetching patterns: {e}")
             return []
-=======
-    def save_policy_to_cache(self, text: str, requirements: List[AuditRequirement]):
-        vector = self.get_semantic_fingerprint(text)
-        serialized = json.dumps([req.model_dump() for req in requirements])
-        payload = {"value": serialized, "metadata": {"vector": vector}}
-        requests.post(f"{self.base_url}/{self.policy_namespace}", headers=self.headers, json=payload)
->>>>>>> 2caebe7 (efficient i hope)
