@@ -5,6 +5,9 @@ import io
 from google import genai
 from google.genai import types
 from pypdf import PdfReader
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from state import AgentState
 from models import AuditRequirement, AuditResult

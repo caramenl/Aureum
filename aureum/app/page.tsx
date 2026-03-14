@@ -70,7 +70,8 @@ export default function App() {
                   'parse_policy': '📜 Extracting Clinical Rules...',
                   'redact_pii': '🛡️ Scrubbing PII for Compliance...',
                   'evaluate_patient': '🧠 Auditing Records vs Policy...',
-                  'critic_verify': '⚖️ Verifying Clinical Groundedness...'
+                  'critic_verify': '⚖️ Verifying Clinical Groundedness...',
+                  'denial_predictor': '🔮 Predicting Denial Risks...'
                 };
                 setLogs(prev => [...prev, { 
                   node: payload.node, 
