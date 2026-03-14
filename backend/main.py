@@ -1,8 +1,11 @@
 import os
 import uuid
-from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
+from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 env_path = os.path.join(os.path.dirname(__file__), ".env")
 load_dotenv(dotenv_path=env_path, override=True)
@@ -12,6 +15,9 @@ from state import AgentState
 from graph import build_audit_graph
 
 app = FastAPI(title="Aureum Medical Auditing API")
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 audit_graph = build_audit_graph()
 
 audit_jobs = {}
@@ -27,8 +33,10 @@ app.add_middleware(
 def root():
     return {"message": "Aureum backend is running", "docs": "/docs"}
 
-@app.post("/api/audit-upload")
+@app.post("/api/audit-upload", status_code=202)
+@limiter.limit("5/minute")
 async def upload_and_audit(
+    request: Request,
     background_tasks: BackgroundTasks,
     patient_id: str,
     policy_pdf: UploadFile = File(...),
@@ -79,11 +87,12 @@ async def upload_and_audit(
     return {
         "job_id": job_id, 
         "message": "Audit started successfully",
-        "status_url": f"/api/audit-status/{job_id}"
+        "status_url": f"/v1/status/{job_id}"
     }
 
-@app.get("/api/audit-status/{job_id}")
-async def get_audit_status(job_id: str):
+@app.get("/v1/status/{job_id}")
+@limiter.limit("60/minute")
+async def get_audit_status(request: Request, job_id: str):
     job = audit_jobs.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job ID not found")
