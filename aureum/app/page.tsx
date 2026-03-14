@@ -1,142 +1,172 @@
-export default function HomePage() {
+"use client";
+import React, { useState, useEffect } from 'react';
+import { Upload, CheckCircle, AlertCircle, FileText, Activity, ShieldCheck } from 'lucide-react';
+
+export default function AureumFrontend() {
+  const [patientId, setPatientId] = useState('PT-7721');
+  const [policyFile, setPolicyFile] = useState<File | null>(null);
+  const [patientFile, setPatientFile] = useState<File | null>(null);
+  const [status, setStatus] = useState<'idle' | 'processing' | 'completed' | 'error'>('idle');
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [auditResult, setAuditResult] = useState<any>(null);
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (status === 'processing' && jobId) {
+      interval = setInterval(async () => {
+        try {
+          const res = await fetch(`http://localhost:8000/api/audit-status/${jobId}`);
+          const data = await res.json();
+          if (data.status === 'COMPLETED') {
+            setAuditResult(data.result);
+            setStatus('completed');
+            clearInterval(interval);
+          } else if (data.status === 'FAILED') {
+            setStatus('error');
+            clearInterval(interval);
+          }
+        } catch (err) {
+          console.error("Polling error:", err);
+        }
+      }, 2000); // Check every 2 seconds
+    }
+    return () => clearInterval(interval);
+  }, [status, jobId]);
+
+  const handleStartAudit = async () => {
+    if (!policyFile || !patientFile) return alert("Upload both PDFs first!");
+
+    setStatus('processing');
+    const formData = new FormData();
+    formData.append('patient_id', patientId);
+    formData.append('policy_pdf', policyFile);
+    formData.append('patient_record', patientFile);
+
+    try {
+      const response = await fetch('http://localhost:8000/api/audit-upload', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await response.json();
+      setJobId(data.job_id); //
+    } catch (err) {
+      setStatus('error');
+    }
+  };
+
   return (
-    <main className="min-h-screen bg-neutral-950 text-white">
-      <div className="mx-auto flex min-h-screen max-w-7xl flex-col px-6 py-8">
-        <header className="mb-10 flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Aureum</h1>
-            <p className="mt-2 text-sm text-neutral-400">
-              AI executive-function agent for focus protection and cognitive load management
-            </p>
-          </div>
+    <div className="min-h-screen bg-slate-50 p-8 text-slate-900">
+      <header className="max-w-5xl mx-auto mb-10 flex justify-between items-end">
+        <div>
+          <h1 className="text-4xl font-black text-indigo-950 tracking-tight">AUREUM</h1>
+          <p className="text-slate-500 font-medium">Agentic Clinical Necessity Audit v1.0</p>
+        </div>
+        <div className="flex items-center gap-2 text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
+          <ShieldCheck className="w-4 h-4" />
+          <span className="text-xs font-bold uppercase tracking-wider">HIPAA Compliant Session</span>
+        </div>
+      </header>
 
-          <div className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-300">
-            Focus Mode: On
-          </div>
-        </header>
-
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-sm">
-            <p className="text-sm text-neutral-400">Current Mode</p>
-            <h2 className="mt-2 text-xl font-semibold">Focus</h2>
-            <p className="mt-2 text-sm text-neutral-500">
-              Low-priority interruptions are being buffered.
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-sm">
-            <p className="text-sm text-neutral-400">Active Task</p>
-            <h2 className="mt-2 text-xl font-semibold">Finish hackathon pitch deck</h2>
-            <p className="mt-2 text-sm text-neutral-500">
-              Estimated block: 45 minutes remaining
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-sm">
-            <p className="text-sm text-neutral-400">Buffered Interruptions</p>
-            <h2 className="mt-2 text-xl font-semibold">3</h2>
-            <p className="mt-2 text-sm text-neutral-500">
-              Held until your next transition period
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-sm">
-            <p className="text-sm text-neutral-400">Upcoming Meeting</p>
-            <h2 className="mt-2 text-xl font-semibold">Team Check-In</h2>
-            <p className="mt-2 text-sm text-neutral-500">
-              Starts in 25 minutes
-            </p>
-          </div>
-        </section>
-
-        <section className="mt-8 grid gap-6 xl:grid-cols-3">
-          <div className="xl:col-span-2 rounded-2xl border border-white/10 bg-white/5 p-6">
-            <p className="text-sm text-neutral-400">Next Best Action</p>
-            <h3 className="mt-3 text-2xl font-semibold">
-              Review the Q3 budget draft and verify the page 4 increase.
-            </h3>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-neutral-400">
-              Aureum buffered this request because you are in Focus Mode and the message was
-              low urgency but highly ambiguous. It translated the request into a concrete next step.
-            </p>
-
-            <div className="mt-6 flex flex-wrap gap-3">
-              <button className="rounded-xl bg-white px-4 py-2 text-sm font-medium text-black transition hover:opacity-90">
-                Do Now
+      <main className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Input Configuration */}
+        <section className="lg:col-span-1 space-y-6">
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <h2 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+              <Activity className="w-5 h-5 text-indigo-600" /> Audit Config
+            </h2>
+            <div className="space-y-4">
+              <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                <label className="text-[10px] font-bold text-slate-400 uppercase">Patient Reference</label>
+                <input 
+                  value={patientId} 
+                  onChange={(e) => setPatientId(e.target.value)}
+                  className="w-full bg-transparent font-mono text-indigo-700 outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-semibold text-slate-700 block mb-2">Policy (PDF)</label>
+                <input type="file" onChange={(e) => setPolicyFile(e.target.files?.[0] || null)} className="text-xs file:bg-indigo-50 file:text-indigo-700 file:border-0 file:rounded-md file:px-3 file:py-1 cursor-pointer" />
+              </div>
+              <div>
+                <label className="text-sm font-semibold text-slate-700 block mb-2">Patient Records (PDF)</label>
+                <input type="file" onChange={(e) => setPatientFile(e.target.files?.[0] || null)} className="text-xs file:bg-indigo-50 file:text-indigo-700 file:border-0 file:rounded-md file:px-3 file:py-1 cursor-pointer" />
+              </div>
+              <button 
+                onClick={handleStartAudit}
+                disabled={status === 'processing'}
+                className="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all disabled:bg-slate-300 flex justify-center items-center gap-2"
+              >
+                {status === 'processing' ? <Activity className="animate-spin" /> : <Upload className="w-5 h-5" />}
+                {status === 'processing' ? 'Running AI Agent...' : 'Submit for Audit'}
               </button>
-              <button className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10">
-                Schedule for Later
-              </button>
-              <button className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10">
-                Draft Reply
-              </button>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-            <p className="text-sm text-neutral-400">Agent Decision</p>
-
-            <div className="mt-4 space-y-4 text-sm">
-              <div>
-                <p className="text-neutral-500">Incoming message</p>
-                <p className="mt-1 text-white">
-                  “Can you look at the Q3 docs when you have a sec?”
-                </p>
-              </div>
-
-              <div>
-                <p className="text-neutral-500">Urgency</p>
-                <p className="mt-1 text-amber-300">Low</p>
-              </div>
-
-              <div>
-                <p className="text-neutral-500">Ambiguity</p>
-                <p className="mt-1 text-red-300">High</p>
-              </div>
-
-              <div>
-                <p className="text-neutral-500">Decision</p>
-                <p className="mt-1 text-emerald-300">Buffer and translate</p>
-              </div>
             </div>
           </div>
         </section>
 
-        <section className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-neutral-400">Buffered Briefing</p>
-              <h3 className="mt-2 text-xl font-semibold">Items waiting for your next break</h3>
-            </div>
-            <button className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10">
-              Generate Briefing
-            </button>
-          </div>
+        {/* Audit Intelligence Output */}
+        <section className="lg:col-span-2">
+          <div className="bg-slate-900 rounded-3xl p-8 shadow-2xl min-h-[500px] border-t-8 border-indigo-500 relative overflow-hidden">
+            {/* Background pattern for "Pro" look */}
+            <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none text-white text-8xl font-black italic">AI</div>
 
-          <div className="mt-5 grid gap-3 md:grid-cols-3">
-            <div className="rounded-xl border border-white/10 bg-black/20 p-4">
-              <p className="text-sm font-medium text-white">Budget review request</p>
-              <p className="mt-2 text-sm text-neutral-400">
-                Manager asked for a review of the Q3 draft.
-              </p>
+            <div className="flex justify-between items-center mb-8 border-b border-slate-800 pb-4">
+              <h3 className="text-indigo-400 font-mono font-bold tracking-widest text-sm uppercase">Verification Console</h3>
+              {status === 'completed' && <div className="text-emerald-400 flex items-center gap-2 text-xs font-bold"><CheckCircle className="w-4 h-4" /> AUDIT SUCCESS</div>}
             </div>
 
-            <div className="rounded-xl border border-white/10 bg-black/20 p-4">
-              <p className="text-sm font-medium text-white">Slide deck edits</p>
-              <p className="mt-2 text-sm text-neutral-400">
-                Teammate requested feedback on slide 5.
-              </p>
-            </div>
+            {status === 'idle' && (
+              <div className="flex flex-col items-center justify-center h-64 text-slate-600">
+                <FileText className="w-12 h-12 mb-4 opacity-20" />
+                <p className="font-mono text-sm">Awaiting clinical data injection...</p>
+              </div>
+            )}
 
-            <div className="rounded-xl border border-white/10 bg-black/20 p-4">
-              <p className="text-sm font-medium text-white">Meeting prep reminder</p>
-              <p className="mt-2 text-sm text-neutral-400">
-                Team check-in begins in 25 minutes.
-              </p>
-            </div>
+            {status === 'processing' && (
+              <div className="font-mono text-sm space-y-4 text-indigo-300">
+                <p className="animate-pulse">{">"} Establishing Moorcheh Memory connection...</p>
+                <p className="delay-75 animate-pulse">{">"} Redacting PII from patient stream...</p>
+                <p className="delay-150 animate-pulse">{">"} Initiating Gemini 1.5 Flash spatial analysis...</p>
+              </div>
+            )}
+
+            {status === 'completed' && auditResult && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                    <span className="text-[10px] text-slate-500 uppercase font-bold">Decision</span>
+                    <p className={`text-xl font-black ${auditResult.status === 'APPROVED' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {auditResult.status}
+                    </p>
+                  </div>
+                  <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                    <span className="text-[10px] text-slate-500 uppercase font-bold">Policy Match</span>
+                    <p className="text-xl font-black text-indigo-300 truncate">{auditResult.policy_name}</p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Clinical Grounding</h4>
+                  {auditResult.requirements.map((req: any, i: number) => (
+                    <div key={i} className="flex items-start justify-between bg-slate-800/50 p-3 rounded-lg border border-slate-800 gap-4">
+                      <div className="flex items-start gap-3">
+                        {req.is_met ? <CheckCircle className="w-4 h-4 text-emerald-500 mt-1 shrink-0" /> : <AlertCircle className="w-4 h-4 text-rose-500 mt-1 shrink-0" />}
+                        <span className="text-xs text-slate-300 leading-relaxed">{req.description}</span>
+                      </div>
+                      <span className="text-[10px] font-bold bg-indigo-900/50 text-indigo-300 px-2 py-1 rounded shrink-0">
+                        Pg {req.page_number || '??'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-8 pt-6 border-t border-slate-800">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Agent Justification</p>
+                  <p className="text-sm text-slate-400 leading-relaxed italic">"{auditResult.final_justification}"</p>
+                </div>
+              </div>
+            )}
           </div>
         </section>
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }
