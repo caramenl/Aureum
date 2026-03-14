@@ -6,7 +6,7 @@ from typing import List, Optional
 
 from models import AuditRequirement
 
-class MoorchehMemoryManager:x
+class MoorchehMemoryManager:
     def __init__(self):
         self.api_key = os.getenv("MOORCHEH_API_KEY")
         if not self.api_key:
