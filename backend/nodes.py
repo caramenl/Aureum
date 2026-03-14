@@ -7,20 +7,14 @@ from state import AgentState
 from models import AuditRequirement, AuditResult
 from memory import MoorchehMemoryManager
 
-# Initialize the Native Google GenAI SDK (No PyPDF2/OCR!)
 api_key = os.getenv("GOOGLE_API_KEY")
 client = genai.Client(api_key=api_key)
-
-# Initialize our Hackathon Memory Manager
 memory_manager = MoorchehMemoryManager()
 
 
 def check_cache_node(state: AgentState):
-    """Hash the policy PDF and check Moorcheh for a cached checklist."""
     policy_hash = memory_manager.get_file_hash(state["policy_pdf_bytes"])
     cached = memory_manager.get_cached_policy(policy_hash)
-    
-    # Determine the routing flag
     next_step = "evaluate_patient" if cached else "parse_policy"
     
     return {
@@ -31,16 +25,12 @@ def check_cache_node(state: AgentState):
 
 
 def parse_policy_node(state: AgentState):
-    """If cache missed, send the raw PDF to Gemini to extract requirements."""
-    # Native PDF Ingestion: We pass the raw bytes directly to GenAI
     policy_doc = types.Part.from_bytes(data=state["policy_pdf_bytes"], mime_type="application/pdf")
     
     prompt = """
     You are an expert Medical Insurance Policy extractor.
     Analyze this policy document and extract the exact clinical requirements needed for approval.
     """
-    
-    # Ask Gemini to return structured JSON matching our list of AuditRequirements
     response = client.models.generate_content(
         model='gemini-1.5-flash',
         contents=[policy_doc, prompt],
@@ -56,8 +46,6 @@ def parse_policy_node(state: AgentState):
     except Exception as e:
         print(f"Error parsing Gemini policy output: {e}")
         requirements = []
-    
-    # Save to Moorcheh cache for future patients!
     memory_manager.save_policy_to_cache(state["policy_hash"], requirements)
     
     return {
@@ -67,10 +55,7 @@ def parse_policy_node(state: AgentState):
 
 
 def evaluate_patient_node(state: AgentState):
-    """Compare the policy requirements against the patient record PDF."""
     requirements = state.get("cached_requirements") or state.get("extracted_requirements")
-    
-    # Native PDF Ingestion for Patient Chart
     patient_doc = types.Part.from_bytes(data=state["patient_record_bytes"], mime_type="application/pdf")
     req_json = json.dumps([r.model_dump() for r in requirements])
     
@@ -83,8 +68,6 @@ def evaluate_patient_node(state: AgentState):
     CRITICAL GROUNDING: You MUST extract the EXACT `page_number` where you found the evidence in the patient record PDF.
     CRITICAL SAFETY: Set `is_verified` to false initially (a human will review it later).
     """
-    
-    # Ask Gemini to return structured JSON matching the final AuditResult schema
     response = client.models.generate_content(
         model='gemini-1.5-flash',
         contents=[patient_doc, prompt],
