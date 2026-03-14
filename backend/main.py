@@ -1,7 +1,8 @@
 import os
 import uuid
-from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Request
+from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -10,18 +11,12 @@ from slowapi.errors import RateLimitExceeded
 env_path = os.path.join(os.path.dirname(__file__), ".env")
 load_dotenv(dotenv_path=env_path, override=True)
 
-from models import AuditResult
 from state import AgentState
 from graph import build_audit_graph
 from nodes import memory_manager
 
 app = FastAPI(title="Aureum Medical Auditing API")
-limiter = Limiter(key_func=get_remote_address)
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 audit_graph = build_audit_graph()
-
-audit_jobs = {}
 
 app.add_middleware(
     CORSMiddleware,
@@ -32,12 +27,10 @@ app.add_middleware(
 
 @app.get("/")
 def root():
-    return {"message": "Aureum backend is running", "docs": "/docs"}
+    return {"message": "Aureum Streaming Backend is running"}
 
-@app.post("/api/audit-upload", status_code=202)
-@limiter.limit("5/minute")
+@app.post("/api/audit-upload")
 async def upload_and_audit(
-    request: Request,
     background_tasks: BackgroundTasks,
     patient_id: str,
     policy_pdf: UploadFile = File(...),
@@ -69,22 +62,17 @@ async def upload_and_audit(
             
             final_state = audit_graph.invoke(initial_state)
             
-            audit_result_model = AuditResult(
-                patient_id=final_state["patient_id"],
-                policy_name=policy_pdf.filename,
-                status=final_state.get("status", "SUCCESS"),
-                requirements=final_state.get("extracted_requirements", []),
-                final_justification=final_state.get("final_justification", "Audit finished."),
-                confidence_score=final_state.get("confidence_score", 1.0),
-                manual_review_required=final_state.get("confidence_score", 1.0) < 0.7
-            )
-            
-            # --- INTELLIGENCE LAYER: Save to Moorcheh Long-Term Memory ---
-            memory_manager.add_audit_to_history(pid, audit_result_model.model_dump())
-            
             audit_jobs[jid] = {
                 "status": "COMPLETED",
-                "result": audit_result_model
+                "result": AuditResult(
+                    patient_id=final_state["patient_id"],
+                    policy_name=policy_pdf.filename,
+                    status=final_state.get("status", "SUCCESS"),
+                    requirements=final_state.get("extracted_requirements", []),
+                    final_justification=final_state.get("final_justification", "Audit finished."),
+                    confidence_score=final_state.get("confidence_score", 1.0),
+                    manual_review_required=final_state.get("confidence_score", 1.0) < 0.7
+                )
             }
         except Exception as e:
             audit_jobs[jid] = {"status": "FAILED", "error": str(e)}
@@ -93,12 +81,11 @@ async def upload_and_audit(
     return {
         "job_id": job_id, 
         "message": "Audit started successfully",
-        "status_url": f"/v1/status/{job_id}"
+        "status_url": f"/api/audit-status/{job_id}"
     }
 
-@app.get("/v1/status/{job_id}")
-@limiter.limit("60/minute")
-async def get_audit_status(request: Request, job_id: str):
+@app.get("/api/audit-status/{job_id}")
+async def get_audit_status(job_id: str):
     job = audit_jobs.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job ID not found")

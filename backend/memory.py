@@ -1,45 +1,47 @@
-import hashlib
 import os
 import json
 import requests
+import numpy as np
 from typing import List, Optional
-
+from google import genai
 from models import AuditRequirement
 
 class MoorchehMemoryManager:
     def __init__(self):
         self.api_key = os.getenv("MOORCHEH_API_KEY")
-        if not self.api_key:
-            raise ValueError("MOORCHEH_API_KEY is missing from environment variables.")
+        self.ai_client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
         self.base_url = "https://api.moorcheh.ai/v1/memory" 
-        self.headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
-        self.policy_namespace = "global_policies"
+        self.headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
+        self.policy_namespace = "semantic_policies"
 
-    def get_file_hash(self, file_content: bytes) -> str:
-        return hashlib.sha256(file_content).hexdigest()
+    def get_semantic_fingerprint(self, text: str) -> List[float]:
+        result = self.ai_client.models.embed_content(
+            model="text-embedding-004",
+            contents=text[:5000]
+        )
+        return result.embeddings[0].values
 
-    def get_cached_policy(self, file_hash: str) -> Optional[List[AuditRequirement]]:
+    def get_cached_policy(self, current_text: str) -> Optional[List[AuditRequirement]]:
         try:
-            response = requests.get(
-                f"{self.base_url}/{self.policy_namespace}/{file_hash}",
-                headers=self.headers
-            )
+            current_vector = self.get_semantic_fingerprint(current_text)
+            response = requests.get(f"{self.base_url}/{self.policy_namespace}", headers=self.headers)
             
             if response.status_code == 200:
-                print(f"[Moorcheh AI] Cache HIT for policy hash: {file_hash[:8]}")
-                data = response.json().get('value', '[]')
-                parsed_data = json.loads(data)
-                return [AuditRequirement(**req) for req in parsed_data]
-            else:
-                print(f"[Moorcheh AI] Cache MISS for policy hash: {file_hash[:8]}")
-                return None
+                stored_items = response.json().get('items', [])
+                for item in stored_items:
+                    stored_vector = item.get('metadata', {}).get('vector')
+
+                    similarity = np.dot(current_vector, stored_vector) / (np.linalg.norm(current_vector) * np.linalg.norm(stored_vector))
+                    
+                    if similarity > 0.98: 
+                        print(f"[Moorcheh] Semantic HIT: {similarity:.2f}")
+                        return [AuditRequirement(**req) for req in json.loads(item['value'])]
+            return None
         except Exception as e:
-            print(f"[Moorcheh AI] Error checking cache: {e}")
+            print(f"[Moorcheh] Semantic Cache error: {e}")
             return None
 
+<<<<<<< HEAD
     def save_policy_to_cache(self, file_hash: str, requirements: List[AuditRequirement]) -> bool:
         try:
             serialized_data = json.dumps([req.model_dump() for req in requirements])
@@ -117,3 +119,10 @@ class MoorchehMemoryManager:
         except Exception as e:
             print(f"[Moorcheh AI] Error fetching patterns: {e}")
             return []
+=======
+    def save_policy_to_cache(self, text: str, requirements: List[AuditRequirement]):
+        vector = self.get_semantic_fingerprint(text)
+        serialized = json.dumps([req.model_dump() for req in requirements])
+        payload = {"value": serialized, "metadata": {"vector": vector}}
+        requests.post(f"{self.base_url}/{self.policy_namespace}", headers=self.headers, json=payload)
+>>>>>>> 2caebe7 (efficient i hope)

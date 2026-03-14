@@ -1,8 +1,10 @@
 import os
 import json
 import re
+import io
 from google import genai
 from google.genai import types
+from pypdf import PdfReader
 
 from state import AgentState
 from models import AuditRequirement, AuditResult
@@ -12,49 +14,31 @@ api_key = os.getenv("GOOGLE_API_KEY")
 client = genai.Client(api_key=api_key)
 memory_manager = MoorchehMemoryManager()
 
-
-import io
-from pypdf import PdfReader
-
-def _extract_text_for_redaction(pdf_bytes):
-    """Extract text locally for String-Matching Groundedness Verification and PII."""
+def _extract_text_locally(pdf_bytes):
     try:
         reader = PdfReader(io.BytesIO(pdf_bytes))
-        text = ""
-        for page in reader.pages:
-            extracted = page.extract_text()
-            if extracted: text += extracted + " "
-        return text
-    except Exception as e:
-        print(f"PDF local text extraction failed: {e}")
+        return " ".join([page.extract_text() or "" for page in reader.pages])
+    except:
         return ""
 
-
 def check_cache_node(state: AgentState):
-    """Intelligence Layer: Check Moorcheh for existing policy audits"""
-    policy_hash = memory_manager.get_file_hash(state["policy_pdf_bytes"])
-    cached = memory_manager.get_cached_policy(policy_hash)
-    
-    next_step = "redact_pii" if cached else "parse_policy"
+    # Semantic Search: Use the text meaning rather than file hash
+    policy_text = _extract_text_locally(state["policy_pdf_bytes"])
+    cached = memory_manager.get_cached_policy(policy_text)
     
     return {
-        "policy_hash": policy_hash,
         "extracted_requirements": cached if cached else [],
-        "next_step": next_step
+        "next_step": "redact_pii" if cached else "parse_policy"
     }
 
 def parse_policy_node(state: AgentState):
-    """Intelligence Layer: Extract structured rules from Policy PDF"""
     policy_doc = types.Part.from_bytes(data=state["policy_pdf_bytes"], mime_type="application/pdf")
     
-    prompt = """
-    Analyze this Insurance Policy PDF. 
-    Extract clinical requirements into a list of JSON objects with:
-    'description', 'is_met' (default false), and 'page_number' (null).
-    """
+    prompt = "Extract clinical requirements as JSON: 'description', 'is_met': false, 'page_number': null."
     
+    # Using 1.5-flash-8b for maximum extraction speed
     response = client.models.generate_content(
-        model='gemini-1.5-flash',
+        model='gemini-1.5-flash-8b',
         contents=[policy_doc, prompt],
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
@@ -63,47 +47,32 @@ def parse_policy_node(state: AgentState):
     )
     
     try:
-        parsed_json = json.loads(response.text)
-        requirements = [AuditRequirement(**req) for req in parsed_json]
-        memory_manager.save_policy_to_cache(state["policy_hash"], requirements)
+        requirements = [AuditRequirement(**req) for req in json.loads(response.text)]
+        # Save to semantic cache using the text as the anchor
+        policy_text = _extract_text_locally(state["policy_pdf_bytes"])
+        memory_manager.save_policy_to_cache(policy_text, requirements)
     except:
         requirements = []
 
-    return {
-        "extracted_requirements": requirements,
-        "next_step": "redact_pii"
-    }
+    return {"extracted_requirements": requirements, "next_step": "redact_pii"}
 
 def redact_pii_node(state: AgentState):
-    """Safety Layer: Scrub PII before sending data to the cloud LLM"""
-    raw_text = _extract_text_for_redaction(state["patient_record_bytes"])
+    # LOCAL ONLY: Avoids LLM latency for PII
+    raw_text = _extract_text_locally(state["patient_record_bytes"])
+    redacted = re.sub(r'\b[A-Z][a-z]+ [A-Z][a-z]+\b', "[NAME]", raw_text)
+    redacted = re.sub(r'\d{3}-\d{2}-\d{4}|\d{2}/\d{2}/\d{4}', "[DATE/ID]", redacted)
     
-    redacted = re.sub(r'\b[A-Z][a-z]+ [A-Z][a-z]+\b', "[PATIENT_NAME]", raw_text)
-    redacted = re.sub(r'\d{3}-\d{2}-\d{4}', "[SSN_REDACTED]", redacted)
-    
-    return {
-        "medical_records_text": redacted,
-        "next_step": "evaluate_patient"
-    }
+    return {"medical_records_text": redacted, "next_step": "evaluate_patient"}
 
 def evaluate_patient_node(state: AgentState):
-    """The 'Brain' Node: Audits the record against the requirements"""
-    requirements = state["extracted_requirements"]
+    req_json = json.dumps([r.model_dump() for r in state["extracted_requirements"]])
     patient_doc = types.Part.from_bytes(data=state["patient_record_bytes"], mime_type="application/pdf")
-    req_json = json.dumps([r.model_dump() for r in requirements])
     
-    prompt = f"""
-    Review this Patient Record against these Policy Requirements:
-    {req_json}
+    prompt = f"Audit records against these rules: {req_json}. Return JSON: 'updated_requirements' (with page_number & evidence_snippet), 'final_justification', 'confidence_score'."
     
-    Return a JSON object with:
-    1. 'updated_requirements': The list with 'is_met' updated, the EXACT 'page_number', and a short EXACT quote as 'evidence_snippet'.
-    2. 'final_justification': A clinical summary of the decision.
-    3. 'confidence_score': 0.0 to 1.0.
-    """
-    
+    # 8B model handles high-volume token processing faster
     response = client.models.generate_content(
-        model='gemini-1.5-flash',
+        model='gemini-1.5-flash-8b',
         contents=[patient_doc, prompt],
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
@@ -124,31 +93,15 @@ def evaluate_patient_node(state: AgentState):
         return {"status": "ERROR", "next_step": "end"}
 
 def critic_verify_node(state: AgentState):
-    """Self-Healing Layer: Verify groundedness and quality"""
     reqs = state["extracted_requirements"]
     raw_text = state.get("medical_records_text", "").lower()
     
-    missing_citations = False
-    
+    # Verify exact string matching to prevent hallucinations
     for r in reqs:
-        if r.is_met and (r.page_number is None):
-            missing_citations = True
-            
-        # Groundedness Verification: String Match Hallucination Check!
-        if r.evidence_snippet:
-            clean_snippet = r.evidence_snippet.lower().strip()
-            # If the exact snippet is not in the text, flag Hallucination
-            if clean_snippet and clean_snippet not in raw_text:
-                r.hallucination_risk = True
-    
-    is_low_confidence = state.get("confidence_score", 1.0) < 0.7
-
-    if (missing_citations or is_low_confidence) and state.get("retry_count", 0) < 1:
-        return {
-            "retry_count": state.get("retry_count", 0) + 1,
-            "next_step": "evaluate_patient",
-            "status": "RE-AUDITING (Low Confidence/No Citations)"
-        }
+        if r.evidence_snippet and r.evidence_snippet.lower() not in raw_text:
+            r.is_verified = False # Flag for manual check if snippet doesn't exist
+        else:
+            r.is_verified = True
 
     return {
         "extracted_requirements": reqs,
