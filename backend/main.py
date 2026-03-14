@@ -114,6 +114,12 @@ async def audit_stream(
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
+@app.get("/api/history/{patient_id}")
+async def get_history(patient_id: str):
+    """Retrieve all past audits for a given patient from Moorcheh."""
+    history = memory_manager.get_patient_history(patient_id)
+    return {"history": history}
+
 @app.get("/api/patterns")
 async def get_denial_patterns():
     """Intelligence Layer: Which insurance rules are causing the most denials across all patients?"""

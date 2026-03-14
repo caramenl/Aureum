@@ -3,10 +3,12 @@ import React, { useState, useRef, useEffect } from 'react';
 import Home from './home';
 import Login from './login';
 import Audit from './audit';
-import Remediation from '@/app/remediation';
+import Remediation from './remediation';
+import AuditHistory from './audit-history';
 
 export default function App() {
-  const [view, setView] = useState<'landing' | 'login' | 'workspace' | 'remediation'>('landing');
+  const [view, setView] = useState<'landing' | 'login' | 'workspace' | 'remediation' | 'history'>('landing');
+  const [user, setUser] = useState<string | null>(null);
   
   // Audit & UI States
   const [patientId, setPatientId] = useState('PT-7721');
@@ -17,6 +19,21 @@ export default function App() {
   const [result, setResult] = useState<any>(null);
   
   const logEndRef = useRef<HTMLDivElement>(null);
+
+  // Session Handling
+  useEffect(() => {
+    const savedUser = localStorage.getItem('aureum_user');
+    if (savedUser) {
+      setUser(savedUser);
+      setView('workspace');
+    }
+  }, []);
+
+  const handleLogin = (email: string) => {
+    localStorage.setItem('aureum_user', email);
+    setUser(email);
+    setView('workspace');
+  };
 
   // Auto-scroll for the terminal logs
   useEffect(() => {
@@ -108,6 +125,8 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    localStorage.removeItem('aureum_user');
+    setUser(null);
     setLogs([]);
     setResult(null);
     setIsProcessing(false);
@@ -116,14 +135,17 @@ export default function App() {
 
   // View Controller Logic
   if (view === 'landing') return <Home onNavigate={() => setView('login')} />;
-  if (view === 'login') return <Login onLogin={() => setView('workspace')} />;
+  if (view === 'login') return <Login onLogin={handleLogin} />;
   if (view === 'remediation') return <Remediation result={result} onBack={() => setView('workspace')} />;
+  if (view === 'history') return <AuditHistory onBack={() => setView('workspace')} />;
 
   return (
     <Audit 
       patientId={patientId}
       setPatientId={setPatientId}
+      policyFile={policyFile}
       setPolicyFile={setPolicyFile}
+      patientFile={patientFile}
       setPatientFile={setPatientFile}
       startAudit={handleStartAudit}
       isProcessing={isProcessing}

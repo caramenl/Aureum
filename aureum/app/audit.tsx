@@ -1,9 +1,9 @@
 "use client";
 import React from 'react';
-import { Activity, Terminal, LogOut, ShieldCheck, Zap } from 'lucide-react';
+import { Activity, Terminal, LogOut, ShieldCheck, Zap, History as HistoryIcon, FileUp, FileCheck } from 'lucide-react';
 
 export default function Audit({ 
-  patientId, setPatientId, setPolicyFile, setPatientFile, 
+  patientId, setPatientId, policyFile, setPolicyFile, patientFile, setPatientFile, 
   startAudit, isProcessing, logs, result, onLogout, logEndRef, setView 
 }: any) {
   return (
@@ -18,9 +18,17 @@ export default function Audit({
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Secure Session: HIPAA-P12</p>
           </div>
         </div>
-        <button onClick={onLogout} className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-white border border-slate-200 text-[10px] font-black uppercase text-slate-400 hover:text-red-500 transition-all shadow-sm">
-          <LogOut className="w-3 h-3" /> Terminate Session
-        </button>
+        <div className="flex gap-4">
+          <button 
+            onClick={() => setView('history')}
+            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-white border border-slate-200 text-[10px] font-black uppercase text-slate-400 hover:text-[#003366] transition-all shadow-sm"
+          >
+            <HistoryIcon className="w-3 h-3 text-[#FFD200]" /> Intelligence Archive
+          </button>
+          <button onClick={onLogout} className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-white border border-slate-200 text-[10px] font-black uppercase text-slate-400 hover:text-red-500 transition-all shadow-sm">
+            <LogOut className="w-3 h-3" /> Terminate Session
+          </button>
+        </div>
       </div>
 
       <div className="max-w-7xl mx-auto grid grid-cols-12 gap-10">
@@ -37,8 +45,31 @@ export default function Audit({
                 className="w-full p-4 bg-slate-50 border-none rounded-2xl focus:ring-2 ring-[#FFD200] outline-none font-bold text-sm" 
               />
               <div className="space-y-4">
-                 <input type="file" onChange={(e) => setPolicyFile(e.target.files?.[0])} className="text-[10px] w-full" />
-                 <input type="file" onChange={(e) => setPatientFile(e.target.files?.[0])} className="text-[10px] w-full" />
+                 <label className="group relative flex items-center gap-4 p-5 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 hover:border-[#FFD200] hover:bg-[#FFD200]/5 cursor-pointer transition-all overflow-hidden">
+                   <input type="file" onChange={(e) => setPolicyFile(e.target.files?.[0])} className="absolute inset-0 opacity-0 cursor-pointer" />
+                   <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                     {policyFile ? <FileCheck className="w-5 h-5 text-emerald-500" /> : <FileUp className="w-5 h-5 text-slate-300 group-hover:text-[#FFD200]" />}
+                   </div>
+                   <div className="flex-1">
+                     <p className="text-[10px] font-black uppercase text-slate-400 group-hover:text-[#003366]">Policy Document</p>
+                     <p className="text-xs font-bold text-[#003366] line-clamp-1">
+                       {policyFile ? policyFile.name : "Select PDF Archive"}
+                     </p>
+                   </div>
+                 </label>
+
+                 <label className="group relative flex items-center gap-4 p-5 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 hover:border-[#FFD200] hover:bg-[#FFD200]/5 cursor-pointer transition-all overflow-hidden">
+                   <input type="file" onChange={(e) => setPatientFile(e.target.files?.[0])} className="absolute inset-0 opacity-0 cursor-pointer" />
+                   <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                     {patientFile ? <FileCheck className="w-5 h-5 text-emerald-500" /> : <ShieldCheck className="w-5 h-5 text-slate-300 group-hover:text-[#FFD200]" />}
+                   </div>
+                   <div className="flex-1">
+                     <p className="text-[10px] font-black uppercase text-slate-400 group-hover:text-[#003366]">Patient Record</p>
+                     <p className="text-xs font-bold text-[#003366] line-clamp-1">
+                       {patientFile ? patientFile.name : "Secure Data Import"}
+                     </p>
+                   </div>
+                 </label>
               </div>
               <button 
                 onClick={startAudit} 
