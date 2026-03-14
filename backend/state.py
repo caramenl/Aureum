@@ -12,3 +12,6 @@ class AgentState(TypedDict):
     final_justification: str
     status: str
     next_step: str
+    retry_count: int
+    medical_records_text: str
+    confidence_score: float

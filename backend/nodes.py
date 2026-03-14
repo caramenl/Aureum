@@ -13,9 +13,21 @@ client = genai.Client(api_key=api_key)
 memory_manager = MoorchehMemoryManager()
 
 
+import io
+from pypdf import PdfReader
+
 def _extract_text_for_redaction(pdf_bytes):
-    """Simple placeholder for PII scrubbing logic"""
-    return "Patient: John Doe, DOB: 01/01/1980. Records indicate..."
+    """Extract text locally for String-Matching Groundedness Verification and PII."""
+    try:
+        reader = PdfReader(io.BytesIO(pdf_bytes))
+        text = ""
+        for page in reader.pages:
+            extracted = page.extract_text()
+            if extracted: text += extracted + " "
+        return text
+    except Exception as e:
+        print(f"PDF local text extraction failed: {e}")
+        return ""
 
 
 def check_cache_node(state: AgentState):
@@ -85,7 +97,7 @@ def evaluate_patient_node(state: AgentState):
     {req_json}
     
     Return a JSON object with:
-    1. 'updated_requirements': The list with 'is_met' updated and the EXACT 'page_number'.
+    1. 'updated_requirements': The list with 'is_met' updated, the EXACT 'page_number', and a short EXACT quote as 'evidence_snippet'.
     2. 'final_justification': A clinical summary of the decision.
     3. 'confidence_score': 0.0 to 1.0.
     """
@@ -114,8 +126,20 @@ def evaluate_patient_node(state: AgentState):
 def critic_verify_node(state: AgentState):
     """Self-Healing Layer: Verify groundedness and quality"""
     reqs = state["extracted_requirements"]
+    raw_text = state.get("medical_records_text", "").lower()
     
-    missing_citations = any(r.is_met and (r.page_number is None) for r in reqs)
+    missing_citations = False
+    
+    for r in reqs:
+        if r.is_met and (r.page_number is None):
+            missing_citations = True
+            
+        # Groundedness Verification: String Match Hallucination Check!
+        if r.evidence_snippet:
+            clean_snippet = r.evidence_snippet.lower().strip()
+            # If the exact snippet is not in the text, flag Hallucination
+            if clean_snippet and clean_snippet not in raw_text:
+                r.hallucination_risk = True
     
     is_low_confidence = state.get("confidence_score", 1.0) < 0.7
 
@@ -127,6 +151,7 @@ def critic_verify_node(state: AgentState):
         }
 
     return {
+        "extracted_requirements": reqs,
         "status": "COMPLETED_VERIFIED",
         "next_step": "end"
     }

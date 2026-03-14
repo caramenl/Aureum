@@ -8,6 +8,7 @@ class AuditRequirement(BaseModel):
     page_number: Optional[int] = Field(None, description="Page number in the patient record PDF for AI grounding")
     evidence_snippet: Optional[str] = Field(None, description="A short direct quote from the record as evidence")
     is_verified: bool = Field(False, description="Human-in-the-loop validation boolean. Defaults to False.")
+    hallucination_risk: bool = Field(False, description="Flagged by Critic Node if evidence snippet is not verbatim in source text")
 
 class AuditResult(BaseModel):
     patient_id: str
@@ -15,3 +16,5 @@ class AuditResult(BaseModel):
     status: str = Field(..., description="Overall status: APPROVED, DENIED, or PENDING_REVIEW")
     requirements: List[AuditRequirement]
     final_justification: str = Field(..., description="1-paragraph summary of the final AI decision")
+    confidence_score: float = Field(1.0, description="AI confidence score for the overall audit")
+    manual_review_required: bool = Field(False, description="Triggered if confidence score is low")

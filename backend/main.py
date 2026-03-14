@@ -67,7 +67,9 @@ async def upload_and_audit(
                     policy_name=policy_pdf.filename,
                     status=final_state.get("status", "SUCCESS"),
                     requirements=final_state.get("extracted_requirements", []),
-                    final_justification=final_state.get("final_justification", "Audit finished.")
+                    final_justification=final_state.get("final_justification", "Audit finished."),
+                    confidence_score=final_state.get("confidence_score", 1.0),
+                    manual_review_required=final_state.get("confidence_score", 1.0) < 0.7
                 )
             }
         except Exception as e:
