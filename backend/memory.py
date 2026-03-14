@@ -1,6 +1,7 @@
 import os
 import json
 import uuid
+import threading
 import requests
 from typing import List, Optional
 from models import AuditRequirement
@@ -25,8 +26,8 @@ class MoorchehMemoryManager:
         self._ensure_namespaces()
 
     def _ensure_namespaces(self):
-        """Create the three Aureum namespaces if they don't exist yet."""
-        for ns in [self.policy_ns, self.history_ns, self.patterns_ns]:
+        """Create the three Aureum namespaces in parallel if they don't exist yet."""
+        def create(ns):
             try:
                 requests.post(
                     f"{self.base_url}/namespaces",
@@ -34,9 +35,11 @@ class MoorchehMemoryManager:
                     json={"namespace_name": ns, "type": "text"},
                     timeout=8
                 )
-                # 409 / already-exists is fine — we ignore all errors silently
             except Exception:
                 pass
+        threads = [threading.Thread(target=create, args=(ns,)) for ns in [self.policy_ns, self.history_ns, self.patterns_ns]]
+        for t in threads: t.start()
+        for t in threads: t.join()
 
     # ── Semantic Policy Cache ─────────────────────────────────────────────────
 
@@ -47,7 +50,7 @@ class MoorchehMemoryManager:
                 f"{self.base_url}/search",
                 headers=self.headers,
                 json={
-                    "query": policy_text[:3000],
+                    "query": policy_text[:500],  # short focused query — faster to embed
                     "namespaces": [self.policy_ns],
                     "top_k": 1,
                     "threshold": 0.65
@@ -112,25 +115,27 @@ class MoorchehMemoryManager:
         return []
 
     def add_audit_to_history(self, patient_id: str, audit_result: dict):
-        """Persist an audit result to Moorcheh for long-term memory."""
-        try:
-            status = audit_result.get("status", "UNKNOWN")
-            r = requests.post(
-                f"{self.base_url}/namespaces/{self.history_ns}/documents",
-                headers=self.headers,
-                json={"documents": [{
-                    "id": str(uuid.uuid4()),
-                    "text": f"Audit for patient {patient_id}: {status}",
-                    "patient_id": patient_id,
-                    "audit_data": json.dumps(audit_result)
-                }]},
-                timeout=10
-            )
-            if r.status_code not in (200, 201, 202):
-                print(f"[Moorcheh] History save warning: {r.status_code} {r.text[:200]}")
-            self._update_global_patterns(audit_result)
-        except Exception as e:
-            print(f"[Moorcheh] History save error: {e}")
+        """Persist an audit result to Moorcheh in a background thread (non-blocking)."""
+        def _save():
+            try:
+                status = audit_result.get("status", "UNKNOWN")
+                r = requests.post(
+                    f"{self.base_url}/namespaces/{self.history_ns}/documents",
+                    headers=self.headers,
+                    json={"documents": [{
+                        "id": str(uuid.uuid4()),
+                        "text": f"Audit for patient {patient_id}: {status}",
+                        "patient_id": patient_id,
+                        "audit_data": json.dumps(audit_result)
+                    }]},
+                    timeout=10
+                )
+                if r.status_code not in (200, 201, 202):
+                    print(f"[Moorcheh] History save warning: {r.status_code} {r.text[:200]}")
+                self._update_global_patterns(audit_result)
+            except Exception as e:
+                print(f"[Moorcheh] History save error: {e}")
+        threading.Thread(target=_save, daemon=True).start()
 
     # ── Denial Pattern Recognition ────────────────────────────────────────────
 
