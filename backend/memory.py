@@ -78,5 +78,42 @@ class MoorchehMemoryManager:
                 headers=self.headers, 
                 json={"value": json.dumps(history)}
             )
+            self._update_global_patterns(audit_result)
         except Exception as e:
             print(f"[Moorcheh AI] Error updating patient history: {e}")
+
+    def _update_global_patterns(self, audit_result: dict):
+        """Aggregates denials across all patients for the Pattern Recognition endpoint."""
+        try:
+            response = requests.get(f"{self.base_url}/global/denial_patterns", headers=self.headers)
+            patterns = {}
+            if response.status_code == 200:
+                patterns = json.loads(response.json().get('value', '{}'))
+                
+            for req in audit_result.get("requirements", []):
+                # If a requirement is NOT met, it contributed to a denial/flag
+                if not req.get("is_met", True):
+                    desc = req.get("description", "Unknown Rule")
+                    patterns[desc] = patterns.get(desc, 0) + 1
+                    
+            requests.post(
+                f"{self.base_url}/global/denial_patterns", 
+                headers=self.headers, 
+                json={"value": json.dumps(patterns)}
+            )
+        except Exception:
+            pass
+
+    def get_denial_patterns(self):
+        """Retrieves the top reasons for audit failures across the population."""
+        try:
+            response = requests.get(f"{self.base_url}/global/denial_patterns", headers=self.headers)
+            if response.status_code == 200:
+                patterns = json.loads(response.json().get('value', '{}'))
+                # Sort by highest denial counts
+                sorted_patterns = sorted(patterns.items(), key=lambda x: x[1], reverse=True)
+                return [{"rule": k, "denial_count": v} for k, v in sorted_patterns]
+            return []
+        except Exception as e:
+            print(f"[Moorcheh AI] Error fetching patterns: {e}")
+            return []

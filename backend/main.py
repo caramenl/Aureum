@@ -13,6 +13,7 @@ load_dotenv(dotenv_path=env_path, override=True)
 from models import AuditResult
 from state import AgentState
 from graph import build_audit_graph
+from nodes import memory_manager
 
 app = FastAPI(title="Aureum Medical Auditing API")
 limiter = Limiter(key_func=get_remote_address)
@@ -68,17 +69,22 @@ async def upload_and_audit(
             
             final_state = audit_graph.invoke(initial_state)
             
+            audit_result_model = AuditResult(
+                patient_id=final_state["patient_id"],
+                policy_name=policy_pdf.filename,
+                status=final_state.get("status", "SUCCESS"),
+                requirements=final_state.get("extracted_requirements", []),
+                final_justification=final_state.get("final_justification", "Audit finished."),
+                confidence_score=final_state.get("confidence_score", 1.0),
+                manual_review_required=final_state.get("confidence_score", 1.0) < 0.7
+            )
+            
+            # --- INTELLIGENCE LAYER: Save to Moorcheh Long-Term Memory ---
+            memory_manager.add_audit_to_history(pid, audit_result_model.model_dump())
+            
             audit_jobs[jid] = {
                 "status": "COMPLETED",
-                "result": AuditResult(
-                    patient_id=final_state["patient_id"],
-                    policy_name=policy_pdf.filename,
-                    status=final_state.get("status", "SUCCESS"),
-                    requirements=final_state.get("extracted_requirements", []),
-                    final_justification=final_state.get("final_justification", "Audit finished."),
-                    confidence_score=final_state.get("confidence_score", 1.0),
-                    manual_review_required=final_state.get("confidence_score", 1.0) < 0.7
-                )
+                "result": audit_result_model
             }
         except Exception as e:
             audit_jobs[jid] = {"status": "FAILED", "error": str(e)}
@@ -97,6 +103,14 @@ async def get_audit_status(request: Request, job_id: str):
     if not job:
         raise HTTPException(status_code=404, detail="Job ID not found")
     return job
+
+@app.get("/api/patterns")
+@limiter.limit("10/minute")
+async def get_denial_patterns(request: Request):
+    """Intelligence Layer: Which insurance rules are causing the most denials across all patients?"""
+    patterns = memory_manager.get_denial_patterns()
+    return {"patterns": patterns}
+
 
 if __name__ == "__main__":
     import uvicorn
