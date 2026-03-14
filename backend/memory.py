@@ -96,26 +96,29 @@ class MoorchehMemoryManager:
                 f"{self.base_url}/search",
                 headers=self.headers,
                 json={
-                    "query": f"audit history patient {patient_id}",
+                    "query": patient_id, # Targeted ID search is more precise than semantic sentences
                     "namespaces": [self.history_ns],
-                    "top_k": 20,
-                    "threshold": 0.7
+                    "top_k": 50,
+                    "threshold": 0.1 # Very inclusive - we filter by ID manually below
                 },
                 timeout=10
             )
             if r.status_code == 200:
                 results = r.json().get("results", [])
-                return [
+                history = [
                     json.loads(item["metadata"]["audit_data"])
                     for item in results
                     if item.get("metadata", {}).get("patient_id") == patient_id
                 ]
+                # Chronological Sorting (Newest First using epoch timestamp)
+                history.sort(key=lambda x: x.get("_timestamp", 0), reverse=True)
+                return history
         except Exception:
             pass
         return []
 
-    def add_audit_to_history(self, patient_id: str, audit_result: dict):
-        """Persist an audit result to Moorcheh in a background thread (non-blocking)."""
+    def add_audit_to_history(self, patient_id: str, audit_result: dict, background: bool = True):
+        """Persist an audit result to Moorcheh. By default runs in a background thread."""
         def _save():
             try:
                 status = audit_result.get("status", "UNKNOWN")
@@ -135,7 +138,11 @@ class MoorchehMemoryManager:
                 self._update_global_patterns(audit_result)
             except Exception as e:
                 print(f"[Moorcheh] History save error: {e}")
-        threading.Thread(target=_save, daemon=True).start()
+        
+        if background:
+            threading.Thread(target=_save, daemon=True).start()
+        else:
+            _save()
 
     # ── Denial Pattern Recognition ────────────────────────────────────────────
 

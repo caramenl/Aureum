@@ -21,3 +21,4 @@ class AuditResult(BaseModel):
     final_justification: str = Field(..., description="1-paragraph summary of the final AI decision")
     confidence_score: float = Field(1.0, description="AI confidence score for the overall audit")
     manual_review_required: bool = Field(False, description="Triggered if confidence score is low")
+    entry_date: Optional[str] = Field(None, description="ISO timestamp of the audit")

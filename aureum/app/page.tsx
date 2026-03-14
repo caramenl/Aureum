@@ -137,7 +137,15 @@ export default function App() {
   if (view === 'landing') return <Home onNavigate={() => setView('login')} />;
   if (view === 'login') return <Login onLogin={handleLogin} />;
   if (view === 'remediation') return <Remediation result={result} onBack={() => setView('workspace')} />;
-  if (view === 'history') return <AuditHistory onBack={() => setView('workspace')} />;
+  if (view === 'history') return (
+    <AuditHistory 
+      onBack={() => setView('workspace')} 
+      onSelect={(record) => {
+        setResult(record);
+        setView('remediation');
+      }}
+    />
+  );
 
   return (
     <Audit 
