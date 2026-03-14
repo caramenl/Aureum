@@ -1,107 +1,181 @@
 import os
 import json
+import uuid
 import requests
-import numpy as np
 from typing import List, Optional
-from google import genai
 from models import AuditRequirement
+
+# Moorcheh API Reference:
+# Auth:    x-api-key header (NOT Authorization: Bearer)
+# Upload:  POST /v1/namespaces/{ns}/documents  {"documents":[{"id":…,"text":…,…metadata}]}
+# Search:  POST /v1/search  {"query":…,"namespaces":[…],"top_k":…,"threshold":…}
+# Results: {"results":[{"id","score","text","metadata"}]}
 
 class MoorchehMemoryManager:
     def __init__(self):
         self.api_key = os.getenv("MOORCHEH_API_KEY")
-        self.ai_client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
-        self.base_url = "https://api.moorcheh.ai/v1/memory" 
-        self.headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
-        self.policy_namespace = "semantic_policies"
+        self.base_url = "https://api.moorcheh.ai/v1"
+        self.headers = {
+            "x-api-key": self.api_key,
+            "Content-Type": "application/json"
+        }
+        self.policy_ns   = "aureum-policy-cache"
+        self.history_ns  = "aureum-patient-history"
+        self.patterns_ns = "aureum-denial-patterns"
+        self._ensure_namespaces()
 
-    def get_semantic_fingerprint(self, text: str) -> List[float]:
-        result = self.ai_client.models.embed_content(
-            model="gemini-embedding-001",
-            contents=text[:5000]
-        )
-        return result.embeddings[0].values
+    def _ensure_namespaces(self):
+        """Create the three Aureum namespaces if they don't exist yet."""
+        for ns in [self.policy_ns, self.history_ns, self.patterns_ns]:
+            try:
+                requests.post(
+                    f"{self.base_url}/namespaces",
+                    headers=self.headers,
+                    json={"namespace_name": ns, "type": "text"},
+                    timeout=8
+                )
+                # 409 / already-exists is fine — we ignore all errors silently
+            except Exception:
+                pass
 
-    def get_cached_policy(self, current_text: str) -> Optional[List[AuditRequirement]]:
+    # ── Semantic Policy Cache ─────────────────────────────────────────────────
+
+    def get_cached_policy(self, policy_text: str) -> Optional[List[AuditRequirement]]:
+        """Search Moorcheh for a semantically similar policy already parsed."""
         try:
-            current_vector = self.get_semantic_fingerprint(current_text)
-            response = requests.get(f"{self.base_url}/{self.policy_namespace}", headers=self.headers)
-            
-            if response.status_code == 200:
-                stored_items = response.json().get('items', [])
-                for item in stored_items:
-                    stored_vector = item.get('metadata', {}).get('vector')
-
-                    similarity = np.dot(current_vector, stored_vector) / (np.linalg.norm(current_vector) * np.linalg.norm(stored_vector))
-                    
-                    if similarity > 0.98: 
-                        print(f"[Moorcheh] Semantic HIT: {similarity:.2f}")
-                        return [AuditRequirement(**req) for req in json.loads(item['value'])]
-            return None
-        except Exception as e:
-            print(f"[Moorcheh] Semantic Cache error: {e}")
-            return None
-
-    def save_policy_to_cache(self, text: str, requirements: List[AuditRequirement]):
-        vector = self.get_semantic_fingerprint(text)
-        serialized = json.dumps([req.model_dump() for req in requirements])
-        payload = {"value": serialized, "metadata": {"vector": vector}}
-        requests.post(f"{self.base_url}/{self.policy_namespace}", headers=self.headers, json=payload)
-
-    def get_patient_history(self, patient_id: str) -> Optional[dict]:
-        try:
-            response = requests.get(f"{self.base_url}/patient_history/{patient_id}", headers=self.headers)
-            if response.status_code == 200:
-                data = response.json().get('value', '{}')
-                return json.loads(data)
-            return None
-        except Exception:
-            return None
-        
-    def add_audit_to_history(self, patient_id: str, audit_result: dict):
-        try:
-            history = self.get_patient_history(patient_id) or {"patient_id": patient_id, "audits": []}
-            history["audits"].append(audit_result)
-            requests.post(
-                f"{self.base_url}/patient_history/{patient_id}", 
-                headers=self.headers, 
-                json={"value": json.dumps(history)}
+            r = requests.post(
+                f"{self.base_url}/search",
+                headers=self.headers,
+                json={
+                    "query": policy_text[:3000],
+                    "namespaces": [self.policy_ns],
+                    "top_k": 1,
+                    "threshold": 0.65
+                },
+                timeout=10
             )
+            if r.status_code == 200:
+                results = r.json().get("results", [])
+                if results:
+                    score = results[0].get("score", 0)
+                    print(f"[Moorcheh] Semantic Cache HIT (score={score:.2f})")
+                    raw = results[0].get("metadata", {}).get("requirements", "[]")
+                    return [AuditRequirement(**req) for req in json.loads(raw)]
+        except Exception as e:
+            print(f"[Moorcheh] Cache lookup error: {e}")
+        return None
+
+    def save_policy_to_cache(self, policy_text: str, requirements: List[AuditRequirement]):
+        """Upload parsed policy requirements to Moorcheh for future semantic retrieval."""
+        try:
+            serialized = json.dumps([req.model_dump() for req in requirements])
+            r = requests.post(
+                f"{self.base_url}/namespaces/{self.policy_ns}/documents",
+                headers=self.headers,
+                json={"documents": [{
+                    "id": str(uuid.uuid4()),
+                    "text": policy_text[:5000],
+                    "requirements": serialized
+                }]},
+                timeout=10
+            )
+            if r.status_code not in (200, 201, 202):
+                print(f"[Moorcheh] Cache save warning: {r.status_code} {r.text[:200]}")
+        except Exception as e:
+            print(f"[Moorcheh] Cache save error: {e}")
+
+    # ── Patient Audit History ─────────────────────────────────────────────────
+
+    def get_patient_history(self, patient_id: str) -> Optional[list]:
+        """Search Moorcheh for all past audits for a given patient."""
+        try:
+            r = requests.post(
+                f"{self.base_url}/search",
+                headers=self.headers,
+                json={
+                    "query": f"audit history patient {patient_id}",
+                    "namespaces": [self.history_ns],
+                    "top_k": 20,
+                    "threshold": 0.7
+                },
+                timeout=10
+            )
+            if r.status_code == 200:
+                results = r.json().get("results", [])
+                return [
+                    json.loads(item["metadata"]["audit_data"])
+                    for item in results
+                    if item.get("metadata", {}).get("patient_id") == patient_id
+                ]
+        except Exception:
+            pass
+        return []
+
+    def add_audit_to_history(self, patient_id: str, audit_result: dict):
+        """Persist an audit result to Moorcheh for long-term memory."""
+        try:
+            status = audit_result.get("status", "UNKNOWN")
+            r = requests.post(
+                f"{self.base_url}/namespaces/{self.history_ns}/documents",
+                headers=self.headers,
+                json={"documents": [{
+                    "id": str(uuid.uuid4()),
+                    "text": f"Audit for patient {patient_id}: {status}",
+                    "patient_id": patient_id,
+                    "audit_data": json.dumps(audit_result)
+                }]},
+                timeout=10
+            )
+            if r.status_code not in (200, 201, 202):
+                print(f"[Moorcheh] History save warning: {r.status_code} {r.text[:200]}")
             self._update_global_patterns(audit_result)
         except Exception as e:
-            print(f"[Moorcheh AI] Error updating patient history: {e}")
+            print(f"[Moorcheh] History save error: {e}")
+
+    # ── Denial Pattern Recognition ────────────────────────────────────────────
 
     def _update_global_patterns(self, audit_result: dict):
-        """Aggregates denials across all patients for the Pattern Recognition endpoint."""
+        """Store each unmet requirement as a document for pattern aggregation."""
         try:
-            response = requests.get(f"{self.base_url}/global/denial_patterns", headers=self.headers)
-            patterns = {}
-            if response.status_code == 200:
-                patterns = json.loads(response.json().get('value', '{}'))
-                
+            docs = []
             for req in audit_result.get("requirements", []):
-                # If a requirement is NOT met, it contributed to a denial/flag
                 if not req.get("is_met", True):
                     desc = req.get("description", "Unknown Rule")
-                    patterns[desc] = patterns.get(desc, 0) + 1
-                    
-            requests.post(
-                f"{self.base_url}/global/denial_patterns", 
-                headers=self.headers, 
-                json={"value": json.dumps(patterns)}
-            )
+                    docs.append({
+                        "id": str(uuid.uuid4()),
+                        "text": f"Denied rule: {desc}",
+                        "rule": desc
+                    })
+            if docs:
+                requests.post(
+                    f"{self.base_url}/namespaces/{self.patterns_ns}/documents",
+                    headers=self.headers,
+                    json={"documents": docs},
+                    timeout=10
+                )
         except Exception:
             pass
 
     def get_denial_patterns(self):
-        """Retrieves the top reasons for audit failures across the population."""
+        """Retrieve the top insurance rules causing denials across all patients."""
         try:
-            response = requests.get(f"{self.base_url}/global/denial_patterns", headers=self.headers)
-            if response.status_code == 200:
-                patterns = json.loads(response.json().get('value', '{}'))
-                # Sort by highest denial counts
-                sorted_patterns = sorted(patterns.items(), key=lambda x: x[1], reverse=True)
-                return [{"rule": k, "denial_count": v} for k, v in sorted_patterns]
-            return []
+            r = requests.post(
+                f"{self.base_url}/search",
+                headers=self.headers,
+                json={
+                    "query": "denied insurance coverage requirement rule",
+                    "namespaces": [self.patterns_ns],
+                    "top_k": 50,
+                    "threshold": 0.5
+                },
+                timeout=10
+            )
+            if r.status_code == 200:
+                from collections import Counter
+                results = r.json().get("results", [])
+                rules = [item.get("metadata", {}).get("rule", "") for item in results if item.get("metadata", {}).get("rule")]
+                counts = Counter(rules)
+                return [{"rule": k, "denial_count": v} for k, v in counts.most_common(10)]
         except Exception as e:
-            print(f"[Moorcheh AI] Error fetching patterns: {e}")
-            return []
+            print(f"[Moorcheh] Patterns error: {e}")
+        return []
