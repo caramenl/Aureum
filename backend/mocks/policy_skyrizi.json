@@ -1,0 +1,5 @@
+{
+  "policy_name": "Prior Auth for Skyrizi",
+  "requirements": "Must have diagnosis of plaque psoriasis AND failure of at least 2 systemic therapies (e.g., Methotrexate).",
+  "issuer": "Sun Life"
+}

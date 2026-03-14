@@ -1,0 +1,18 @@
+{
+  "resourceType": "Bundle",
+  "id": "patient-001",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Condition",
+        "code": { "text": "Psoriasis" }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationStatement",
+        "note": [{ "text": "Failed Methotrexate due to nausea" }]
+      }
+    }
+  ]
+}
