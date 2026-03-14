@@ -97,7 +97,8 @@ async def audit_stream(
                 "update": {
                     "status": "COMPLETED",
                     "req_count": len(audit_result_model.requirements),
-                    "justification": audit_result_model.final_justification
+                    "justification": audit_result_model.final_justification,
+                    "requirements": [r.model_dump() for r in audit_result_model.requirements]
                 }
             })
             yield f"data: {end_payload}\n\n"

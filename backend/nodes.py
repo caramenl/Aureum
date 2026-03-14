@@ -144,5 +144,59 @@ def critic_verify_node(state: AgentState):
     return {
         "extracted_requirements": reqs,
         "status": "COMPLETED_VERIFIED",
-        "next_step": "end"
+        "next_step": "predict_denials"
     }
+
+def denial_predictor_node(state: AgentState):
+    """Predicts denials and generates actionable 'Bridge Actions' for unmet requirements."""
+    unmet = [r for r in state["extracted_requirements"] if not r.is_met]
+    
+    if not unmet:
+        return {"status": "COMPLETED_CLEAN"}
+
+    unmet_json = json.dumps([r.model_dump() for r in unmet])
+    
+    prompt = f"""You are a medical billing and prior authorization consultant. 
+The following insurance policy requirements were NOT met by the patient's current records:
+{unmet_json}
+
+For each unmet requirement, generate a 'Bridge Action'. 
+A Bridge Action is a specific, actionable task the provider's office can take to solve the gap (e.g., 'Request pharmacy records from 2024', 'Schedule a follow-up for a physical exam', 'Upload recent lab results').
+
+Return a JSON ARRAY of objects. Each object must have:
+- "requirement_id": string (the exact ID from the input)
+- "bridge_action": string (the helpful advice)
+
+Return ONLY the JSON array. No markdown, no explanation."""
+
+    response = client.models.generate_content(
+        model='gemini-2.5-flash',
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            temperature=0
+        ),
+    )
+
+    try:
+        raw_text = response.text
+        if raw_text.startswith('```'):
+            raw_text = raw_text.replace('```json\n', '').replace('```', '').strip()
+        predictions = json.loads(raw_text)
+        
+        # Merge bridge actions back into state
+        updated_reqs = []
+        bridge_map = {p["requirement_id"]: p["bridge_action"] for p in predictions}
+        
+        for r in state["extracted_requirements"]:
+            if r.requirement_id in bridge_map:
+                r.bridge_action = bridge_map[r.requirement_id]
+            updated_reqs.append(r)
+            
+        return {
+            "extracted_requirements": updated_reqs,
+            "status": "COMPLETED_PREDICTED"
+        }
+    except Exception as e:
+        print(f"DENIAL PREDICTOR ERROR: {e}\nRAW: {response.text}")
+        return {"status": "COMPLETED_VERIFIED"}
