@@ -71,8 +71,33 @@ async def audit_stream(
                     yield f"data: {json.dumps(payload)}\n\n"
                     await asyncio.sleep(0.05) # Keep UI smooth
 
+<<<<<<< HEAD
             # Signal End of Stream
             yield f"data: {json.dumps({'node': 'END'})}\n\n"
+=======
+            audit_result_model = AuditResult(
+                patient_id=current_state.get("patient_id", patient_id),
+                policy_name=policy_pdf.filename,
+                status=current_state.get("status", "SUCCESS"),
+                requirements=current_state.get("extracted_requirements", []),
+                final_justification=current_state.get("final_justification", "Audit finished"),
+                confidence_score=current_state.get("confidence_score", 1.0),
+                manual_review_required=current_state.get("confidence_score", 1.0) < 0.7
+            )
+            # Add to Intelligence Layer Long-Term Memory
+            memory_manager.add_audit_to_history(patient_id, audit_result_model.model_dump())
+            
+            end_payload = json.dumps({
+                "node": "END",
+                "update": {
+                    "status": "COMPLETED",
+                    "req_count": len(audit_result_model.requirements),
+                    "justification": audit_result_model.final_justification,
+                    "requirements": [r.model_dump() for r in audit_result_model.requirements]
+                }
+            })
+            yield f"data: {end_payload}\n\n"
+>>>>>>> 40313d9f39e4692c6c29a5e555d5e266161900d5
             
         except Exception as e:
             error_msg = {"node": "ERROR", "msg": f"SYSTEM FAILURE: {str(e)}"}

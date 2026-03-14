@@ -5,7 +5,8 @@ from nodes import (
     parse_policy_node, 
     evaluate_patient_node, 
     redact_pii_node, 
-    critic_verify_node
+    critic_verify_node,
+    denial_predictor_node
 )
 
 def build_audit_graph():
@@ -16,6 +17,7 @@ def build_audit_graph():
     graph.add_node("redact_pii", redact_pii_node)
     graph.add_node("evaluate_patient", evaluate_patient_node)
     graph.add_node("critic_verify", critic_verify_node)
+    graph.add_node("denial_predictor", denial_predictor_node)
     
     graph.add_edge(START, "check_cache")
     
@@ -36,11 +38,13 @@ def build_audit_graph():
     def route_critic(state: AgentState):
         if state.get("next_step") == "evaluate_patient":
             return "evaluate_patient"
-        return END
+        return "denial_predictor"
 
     graph.add_conditional_edges("critic_verify", route_critic, {
         "evaluate_patient": "evaluate_patient",
-        END: END
+        "denial_predictor": "denial_predictor"
     })
+
+    graph.add_edge("denial_predictor", END)
     
     return graph.compile()

@@ -7,7 +7,7 @@ import Audit from './audit';
 export default function App() {
   const [view, setView] = useState<'landing' | 'login' | 'workspace'>('landing');
   
-  // Audit States
+  // Audit & UI States
   const [patientId, setPatientId] = useState('PT-7721');
   const [policyFile, setPolicyFile] = useState<File | undefined>();
   const [patientFile, setPatientFile] = useState<File | undefined>();
@@ -17,6 +17,7 @@ export default function App() {
   
   const logEndRef = useRef<HTMLDivElement>(null);
 
+  // Auto-scroll for the terminal logs
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [logs]);
@@ -26,7 +27,7 @@ export default function App() {
 
     setIsProcessing(true);
     setLogs([{ node: 'START', msg: 'ESTABLISHING SECURE GATEWAY...' }]);
-    setResult(null); // Clear previous results
+    setResult(null); 
 
     const formData = new FormData();
     formData.append('patient_id', patientId);
@@ -39,43 +40,79 @@ export default function App() {
         body: formData,
       });
 
-      const reader = response.body?.getReader();
+      if (!response.body) return;
+      const reader = response.body.getReader();
       const decoder = new TextDecoder();
-
-      if (!reader) return;
+      let buffer = ""; 
 
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\n');
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ""; // Save partial line for next chunk
 
         for (const line of lines) {
           if (line.startsWith('data: ')) {
-            const data = JSON.parse(line.replace('data: ', ''));
-            
-            // 1. Update Logs
-            if (data.msg) {
-              setLogs(prev => [...prev, { node: data.node, msg: data.msg }]);
-            }
+            try {
+              const jsonStr = line.replace('data: ', '').trim();
+              if (!jsonStr) continue;
+              const payload = JSON.parse(jsonStr);
 
-            // 2. Update Result Summary (The Fix)
-            if (data.update && data.update.justification) {
-              console.log("Audit Summary Found:", data.update.justification);
-              setResult(data.update);
-            }
+              // 1. Handle Specialized Messages or Logs
+              if (payload.msg) {
+                setLogs(prev => [...prev, { node: payload.node, msg: payload.msg }]);
+              } else {
+                // Mapping node names to user-friendly messages if msg is missing
+                const nodeMessages: Record<string, string> = {
+                  'check_cache': '🔍 Checking Semantic Policy Cache...',
+                  'parse_policy': '📜 Extracting Clinical Rules...',
+                  'redact_pii': '🛡️ Scrubbing PII for Compliance...',
+                  'evaluate_patient': '🧠 Auditing Records vs Policy...',
+                  'critic_verify': '⚖️ Verifying Clinical Groundedness...'
+                };
+                setLogs(prev => [...prev, { 
+                  node: payload.node, 
+                  msg: nodeMessages[payload.node] || `Processing ${payload.node}...` 
+                }]);
+              }
 
-            if (data.node === 'END') setIsProcessing(false);
+              // 2. Capture the Audit Result/Summary (CRITICAL)
+              if (payload.update && payload.update.justification) {
+                console.log("Summary Received:", payload.update.justification);
+                setResult(payload.update);
+              }
+
+              // 3. Handle End/Error
+              if (payload.node === 'END' || payload.node === 'ERROR') {
+                setIsProcessing(false);
+                if (payload.node === 'END') {
+                  setLogs(prev => [...prev, { node: 'END', msg: '✅ Audit Pipeline Completed.' }]);
+                }
+              }
+
+            } catch (e) {
+              console.error("Stream parsing error:", e);
+            }
           }
         }
       }
     } catch (err) {
+      console.error("Connection Error:", err);
       setLogs(prev => [...prev, { node: 'ERROR', msg: 'CONNECTION INTERRUPTED' }]);
       setIsProcessing(false);
     }
   };
 
+  const handleLogout = () => {
+    setLogs([]);
+    setResult(null);
+    setIsProcessing(false);
+    setView('landing');
+  };
+
+  // View Controller Logic
   if (view === 'landing') return <Home onNavigate={() => setView('login')} />;
   if (view === 'login') return <Login onLogin={() => setView('workspace')} />;
 
@@ -89,7 +126,7 @@ export default function App() {
       isProcessing={isProcessing}
       logs={logs}
       result={result}
-      onLogout={() => setView('landing')}
+      onLogout={handleLogout}
       logEndRef={logEndRef}
     />
   );

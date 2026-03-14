@@ -7,6 +7,7 @@ class AuditRequirement(BaseModel):
     is_met: bool = Field(..., description="Whether the patient records satisfy this requirement")
     page_number: Optional[int] = Field(None, description="Page number in the patient record PDF for AI grounding")
     evidence_snippet: Optional[str] = Field(None, description="A short direct quote from the record as evidence")
+    bridge_action: Optional[str] = Field(None, description="Actionable advice for the user if the requirement is not met")
     is_verified: bool = Field(False, description="Human-in-the-loop validation boolean. Defaults to False.")
     hallucination_risk: bool = Field(False, description="Flagged by Critic Node if evidence snippet is not verbatim in source text")
 
