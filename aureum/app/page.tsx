@@ -3,9 +3,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import Home from './home';
 import Login from './login';
 import Audit from './audit';
+import Remediation from '@/app/remediation';
 
 export default function App() {
-  const [view, setView] = useState<'landing' | 'login' | 'workspace'>('landing');
+  const [view, setView] = useState<'landing' | 'login' | 'workspace' | 'remediation'>('landing');
   
   // Audit & UI States
   const [patientId, setPatientId] = useState('PT-7721');
@@ -116,6 +117,7 @@ export default function App() {
   // View Controller Logic
   if (view === 'landing') return <Home onNavigate={() => setView('login')} />;
   if (view === 'login') return <Login onLogin={() => setView('workspace')} />;
+  if (view === 'remediation') return <Remediation result={result} onBack={() => setView('workspace')} />;
 
   return (
     <Audit 
@@ -129,6 +131,7 @@ export default function App() {
       result={result}
       onLogout={handleLogout}
       logEndRef={logEndRef}
+      setView={setView}
     />
   );
 }

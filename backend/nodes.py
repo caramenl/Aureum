@@ -46,12 +46,13 @@ Insurance Policy Text:
 {policy_text[:8000]}
 
 Return a JSON ARRAY only. Each element must have EXACTLY these fields:
-- "requirement_id": string (e.g., "REQ-001", "REQ-002")  <-- ADD THIS
+- "requirement_id": string (e.g., "REQ-001", "REQ-002")
 - "description": string (one specific requirement)
+- "category": string (the specific clinical indication this applies to, e.g., "Plaque Psoriasis", "Crohn's Disease", "General")
 - "is_met": false
 - "page_number": null
 
-Example: [{{"requirement_id": "REQ-001", "description": "Patient must have tried and failed at least one conventional systemic therapy", "is_met": false, "page_number": null}}]
+Example: [{{"requirement_id": "REQ-001", "description": "Patient must have tried and failed at least one conventional systemic therapy", "category": "General", "is_met": false, "page_number": null}}]
 Return ONLY the JSON array. No markdown, no explanation."""
 
     response = client.models.generate_content(
@@ -99,7 +100,7 @@ Policy requirements to audit:
 {req_json}
 
 Return a JSON OBJECT with EXACTLY these fields:
-- "updated_requirements": array of requirements (include the "requirement_id", "description", "is_met", "page_number", and "evidence_snippet")
+- "updated_requirements": array of requirements. For each, include "requirement_id", "description", "is_met", "page_number", "evidence_snippet", AND "is_applicable" (set to false if the requirement is for a different indication than the patient's diagnosed condition).
 - "final_justification": 2-3 sentence summary of overall audit outcome
 - "confidence_score": number 0.0-1.0
 
@@ -152,7 +153,7 @@ def critic_verify_node(state: AgentState):
 
 def denial_predictor_node(state: AgentState):
     """Predicts denials and generates actionable 'Bridge Actions' for unmet requirements."""
-    unmet = [r for r in state["extracted_requirements"] if not r.is_met]
+    unmet = [r for r in state["extracted_requirements"] if not r.is_met and r.is_applicable]
     
     if not unmet:
         return {"status": "COMPLETED_CLEAN"}
