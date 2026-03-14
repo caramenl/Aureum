@@ -14,7 +14,7 @@ export default function AureumFrontend() {
     if (status === 'processing' && jobId) {
       interval = setInterval(async () => {
         try {
-          const res = await fetch(`http://localhost:8000/api/audit-status/${jobId}`);
+          const res = await fetch(`http://localhost:8000/v1/status/${jobId}`);
           const data = await res.json();
           if (data.status === 'COMPLETED') {
             setAuditResult(data.result);
