@@ -1,10 +1,24 @@
-
-from typing import TypedDict, List, Optional
+import operator
+from typing import Annotated, TypedDict, List, Optional
+from models import AuditRequirement, AuditResult
 
 class AgentState(TypedDict):
     patient_id: str
-    policy_text: str          
-    medical_records: str    
-    identified_gaps: List[str] 
-    status: str               
-    final_justification: str 
+    
+    # Raw File Data
+    policy_pdf_bytes: bytes
+    patient_record_bytes: bytes
+    
+    # Moorcheh Hashing & Cache
+    policy_hash: str
+    cached_requirements: Optional[List[AuditRequirement]]
+    
+    # LLM Extracted Data
+    extracted_requirements: List[AuditRequirement]
+    
+    # Final Result
+    final_justification: str
+    status: str
+    
+    # LangGraph Error/Routing Control
+    next_step: str
