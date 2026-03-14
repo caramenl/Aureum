@@ -43,11 +43,12 @@ Insurance Policy Text:
 {policy_text[:8000]}
 
 Return a JSON ARRAY only. Each element must have EXACTLY these fields:
+- "requirement_id": string (e.g., "REQ-001", "REQ-002")  <-- ADD THIS
 - "description": string (one specific requirement)
 - "is_met": false
 - "page_number": null
 
-Example: [{{"description": "Patient must have tried and failed at least one conventional systemic therapy", "is_met": false, "page_number": null}}]
+Example: [{{"requirement_id": "REQ-001", "description": "Patient must have tried and failed at least one conventional systemic therapy", "is_met": false, "page_number": null}}]
 Return ONLY the JSON array. No markdown, no explanation."""
 
     response = client.models.generate_content(
@@ -95,12 +96,12 @@ Policy requirements to audit:
 {req_json}
 
 Return a JSON OBJECT with EXACTLY these fields:
-- "updated_requirements": array of requirements (same as input, with is_met set and evidence_snippet added)
+- "updated_requirements": array of requirements (include the "requirement_id", "description", "is_met", "page_number", and "evidence_snippet")
 - "final_justification": 2-3 sentence summary of overall audit outcome
 - "confidence_score": number 0.0-1.0
 
 Example format:
-{{"updated_requirements": [{{"description": "...", "is_met": true, "page_number": 2, "evidence_snippet": "exact quote from record"}}], "final_justification": "Patient meets X of Y requirements...", "confidence_score": 0.9}}
+{{"updated_requirements": [{{"requirement_id": "REQ-001", "description": "...", "is_met": true, "page_number": 2, "evidence_snippet": "exact quote from record"}}], "final_justification": "Patient meets X of Y requirements...", "confidence_score": 0.9}}
 Return ONLY the JSON object. No markdown, no explanation."""
     
     # 8B model handles high-volume token processing faster
