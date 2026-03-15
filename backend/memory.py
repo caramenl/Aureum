@@ -117,6 +117,54 @@ class MoorchehMemoryManager:
             pass
         return []
 
+    def get_dashboard_stats(self):
+        """Aggregate stats across all patient audits."""
+        try:
+            r = requests.post(
+                f"{self.base_url}/search",
+                headers=self.headers,
+                json={
+                    "query": "audit patient medical insurance", # Broad search for all history
+                    "namespaces": [self.history_ns],
+                    "top_k": 100,
+                    "threshold": 0.05
+                },
+                timeout=10
+            )
+            if r.status_code == 200:
+                results = r.json().get("results", [])
+                all_audits = [json.loads(item["metadata"]["audit_data"]) for item in results]
+                
+                total = len(all_audits)
+                if total == 0:
+                    return {"total_claims": 0, "approval_rate": 0, "provider_stats": [], "doc_gap": 0}
+
+                approvals = len([a for a in all_audits if a.get("status") == "APPROVED"])
+                gaps = len([a for a in all_audits if a.get("manual_review_required") == True])
+                
+                # Group by Provider (using policy_name)
+                providers = {}
+                for a in all_audits:
+                    p = a.get("policy_name", "Unknown Provider")
+                    if p not in providers: providers[p] = {"total": 0, "approved": 0}
+                    providers[p]["total"] += 1
+                    if a.get("status") == "APPROVED": providers[p]["approved"] += 1
+                
+                provider_stats = [
+                    {"name": k, "rate": round(v["approved"]/v["total"] * 100, 1), "total": v["total"]}
+                    for k, v in providers.items()
+                ]
+                
+                return {
+                    "total_claims": total,
+                    "approval_rate": round(approvals / total * 100, 1),
+                    "doc_gap": round(gaps / total * 100, 1),
+                    "provider_stats": sorted(provider_stats, key=lambda x: x["total"], reverse=True)
+                }
+        except Exception as e:
+            print(f"Stats Error: {e}")
+        return {"total_claims": 0, "approval_rate": 0, "provider_stats": [], "doc_gap": 0}
+
     def add_audit_to_history(self, patient_id: str, audit_result: dict, background: bool = True):
         """Persist an audit result to Moorcheh. By default runs in a background thread."""
         def _save():
@@ -191,3 +239,12 @@ class MoorchehMemoryManager:
         except Exception as e:
             print(f"[Moorcheh] Patterns error: {e}")
         return []
+
+    def reset_all_data(self):
+        """Wipe all history for a fresh environment."""
+        for ns in [self.history_ns, self.patterns_ns]:
+            try:
+                requests.delete(f"{self.base_url}/namespaces/{ns}", headers=self.headers, timeout=10)
+            except:
+                pass
+        self._ensure_namespaces()

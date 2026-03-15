@@ -143,11 +143,23 @@ async def get_history(patient_id: str):
     history = memory_manager.get_patient_history(patient_id)
     return {"history": history}
 
+@app.get("/api/dashboard/stats")
+async def get_dashboard_stats():
+    """Intelligence Layer: Aggregate stats across all patient audits."""
+    stats = memory_manager.get_dashboard_stats()
+    return stats
+
 @app.get("/api/patterns")
 async def get_denial_patterns():
     """Intelligence Layer: Which insurance rules are causing the most denials across all patients?"""
     patterns = memory_manager.get_denial_patterns()
     return {"patterns": patterns}
+
+@app.post("/api/reset")
+async def reset_dashboard():
+    """DANGER: Wipe all history and start fresh."""
+    memory_manager.reset_all_data()
+    return {"status": "WIPED"}
 
 if __name__ == "__main__":
     import uvicorn

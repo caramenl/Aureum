@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   LayoutDashboard, ShieldAlert, History, LogOut, 
-  Activity, Bell, Search, Zap, Clock 
+  Activity, Bell, Search, Zap, Clock, BarChart3 
 } from 'lucide-react';
 
 import Home from './home';
@@ -11,10 +11,11 @@ import Audit from './audit';
 import Remediation from './remediation';
 import AuditHistory from './audit-history';
 import Timeline from './timeline';
+import Dashboard from './dashboard';
 
 export default function App() {
   const [view, setView] = useState<'landing' | 'login' | 'dashboard'>('landing');
-  const [activeTab, setActiveTab] = useState<'audit' | 'solutions' | 'history' | 'timeline'>('audit');
+  const [activeTab, setActiveTab] = useState<'audit' | 'solutions' | 'history' | 'timeline' | 'dashboard'>('audit');
   const [user, setUser] = useState<string | null>(null);
   
   const [patientId, setPatientId] = useState('PT-7721');
@@ -98,6 +99,12 @@ export default function App() {
             onClick={() => setActiveTab('audit')} 
           />
           <SidebarButton 
+            icon={<BarChart3 size={18}/>} 
+            label="Intelligence" 
+            active={activeTab === 'dashboard'} 
+            onClick={() => setActiveTab('dashboard')} 
+          />
+          <SidebarButton 
             icon={<ShieldAlert size={18}/>} 
             label="Solutions Hub" 
             active={activeTab === 'solutions'} 
@@ -151,6 +158,10 @@ export default function App() {
 
           {activeTab === 'timeline' && (
             <Timeline result={result} onBack={() => setActiveTab('audit')} />
+          )}
+
+          {activeTab === 'dashboard' && (
+            <Dashboard onNavigate={setActiveTab} />
           )}
 
           {activeTab === 'history' && (
