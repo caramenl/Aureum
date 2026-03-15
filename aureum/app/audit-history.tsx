@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, History as HistoryIcon, Search, FileText, Calendar, ChevronRight, Activity } from 'lucide-react';
 
-export default function AuditHistory({ onBack }: { onBack: () => void }) {
+export default function AuditHistory({ onBack, onSelect }: { onBack: () => void, onSelect: (record: any) => void }) {
   const [patientId, setPatientId] = useState('PT-7721');
   const [records, setRecords] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -69,7 +69,8 @@ export default function AuditHistory({ onBack }: { onBack: () => void }) {
             records.map((record, i) => (
               <div 
                 key={i} 
-                className="bg-white group rounded-[30px] p-8 shadow-sm border border-slate-100 flex items-center justify-between hover:shadow-md transition-all animate-in slide-in-from-bottom-4"
+                onClick={() => onSelect(record)}
+                className="bg-white group rounded-[30px] p-8 shadow-sm border border-slate-100 flex items-center justify-between hover:shadow-md transition-all animate-in slide-in-from-bottom-4 cursor-pointer active:scale-[0.98]"
                 style={{ animationDelay: `${i * 100}ms` }}
               >
                 <div className="flex items-center gap-6">
@@ -82,7 +83,7 @@ export default function AuditHistory({ onBack }: { onBack: () => void }) {
                       <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-tighter ${
                         record.status === 'APPROVED' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'
                       }`}>
-                        {record.status}
+                        {record.status?.startsWith('COMPLETED') ? 'DENIED' : (record.status || 'DENIED')}
                       </span>
                     </div>
                     <p className="text-sm text-slate-400 font-medium line-clamp-1 max-w-xl">
@@ -96,7 +97,11 @@ export default function AuditHistory({ onBack }: { onBack: () => void }) {
                      <div className="flex items-center gap-2 text-slate-300 font-black text-[10px] uppercase justify-end">
                        <Calendar className="w-3 h-3" /> Entry Date
                      </div>
-                     <p className="font-bold text-slate-500">March 14, 2026</p>
+                     <p className="font-bold text-slate-500">
+                       {record.entry_date 
+                         ? new Date(record.entry_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+                         : "March 14, 2026"}
+                     </p>
                   </div>
                   <div className="w-12 h-12 rounded-xl bg-slate-50 flex items-center justify-center text-slate-300 group-hover:text-[#003366] group-hover:bg-[#FFD200] transition-all shadow-sm">
                     <ChevronRight className="w-5 h-5" />

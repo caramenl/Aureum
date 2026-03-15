@@ -103,7 +103,21 @@ export default function App() {
 
   // View Routing
   if (view === 'landing') return <Home onNavigate={() => setView('login')} />;
+<<<<<<< HEAD
   if (view === 'login') return <Login onLogin={(email) => { setUser(email); setView('dashboard'); }} />;
+=======
+  if (view === 'login') return <Login onLogin={handleLogin} />;
+  if (view === 'remediation') return <Remediation result={result} onBack={() => setView('workspace')} />;
+  if (view === 'history') return (
+    <AuditHistory 
+      onBack={() => setView('workspace')} 
+      onSelect={(record) => {
+        setResult(record);
+        setView('remediation');
+      }}
+    />
+  );
+>>>>>>> ffafc5ed4e380f272d5e5c05fd335be2a41fe47a
 
   return (
     <div className="flex min-h-screen bg-[#F0F2F5] font-sans">

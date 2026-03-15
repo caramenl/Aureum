@@ -15,6 +15,15 @@ export default function Remediation({ result, onBack }: any) {
           <ArrowLeft className="w-3 h-3" /> Back to Audit
         </button>
         <div className="flex items-center gap-4">
+          {result?.status && (
+            <div className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm border animate-in fade-in slide-in-from-right-4 ${
+              result.status === 'APPROVED' 
+                ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
+                : 'bg-amber-50 text-amber-600 border-amber-100'
+            }`}>
+              Verdict: {result.status?.startsWith('COMPLETED') ? 'DENIED' : result.status}
+            </div>
+          )}
           <Shield className="w-5 h-5 text-[#FFD200]" />
           <h1 className="text-xl font-black uppercase italic tracking-tight">Remediation <span className="text-slate-300 font-light">Intelligence</span></h1>
         </div>

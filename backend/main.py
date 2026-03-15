@@ -1,6 +1,8 @@
 import os
 import json
 import asyncio
+import time
+from datetime import datetime
 from dotenv import load_dotenv
 
 # Load env immediately at top level
@@ -85,22 +87,33 @@ async def audit_stream(
                     yield f"data: {json.dumps(payload)}\n\n"
                     await asyncio.sleep(0.05) # Keep UI smooth
 
+            # Determine Clinical Verdict
+            reqs = current_state.get("extracted_requirements", [])
+            any_denials = any(r.is_met == False and r.is_applicable != False for r in reqs)
+            clinical_verdict = "DENIED" if any_denials else "APPROVED"
+
             audit_result_model = AuditResult(
                 patient_id=current_state.get("patient_id", patient_id),
                 policy_name=policy_pdf.filename,
-                status=current_state.get("status", "SUCCESS"),
-                requirements=current_state.get("extracted_requirements", []),
+                status=clinical_verdict,
+                requirements=reqs,
                 final_justification=current_state.get("final_justification", "Audit finished"),
                 confidence_score=current_state.get("confidence_score", 1.0),
-                manual_review_required=current_state.get("confidence_score", 1.0) < 0.7
+                manual_review_required=current_state.get("confidence_score", 1.0) < 0.7,
+                entry_date=datetime.utcnow().isoformat() + "Z"
             )
-            # Add to Intelligence Layer Long-Term Memory
-            memory_manager.add_audit_to_history(patient_id, audit_result_model.model_dump())
+            # Add timestamp to dump for sorting
+            result_dump = audit_result_model.model_dump()
+            result_dump["_timestamp"] = time.time()  # Epoch for easy sorting
+            
+            # Add to Intelligence Layer Long-Term Memory (BLOCKING to avoid race condition)
+            yield f"data: {json.dumps({'node': 'save_history', 'msg': '📦 PERMANENTLY ARCHIVING AUDIT...'})}\n\n"
+            memory_manager.add_audit_to_history(patient_id, result_dump, background=False)
             
             end_payload = json.dumps({
                 "node": "END",
                 "update": {
-                    "status": "COMPLETED",
+                    "status": clinical_verdict,
                     "req_count": len(audit_result_model.requirements),
                     "justification": audit_result_model.final_justification,
                     "requirements": [r.model_dump() for r in audit_result_model.requirements]
