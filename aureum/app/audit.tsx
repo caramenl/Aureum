@@ -1,130 +1,107 @@
 "use client";
 import React from 'react';
-import { Activity, Terminal, LogOut, ShieldCheck, Zap, History as HistoryIcon, FileUp, FileCheck } from 'lucide-react';
+import { FileUp, CheckCircle2, Zap, Loader2, ShieldCheck, FileText } from 'lucide-react';
 
 export default function Audit({ 
   patientId, setPatientId, policyFile, setPolicyFile, patientFile, setPatientFile, 
-  startAudit, isProcessing, logs, result, onLogout, logEndRef, setView 
+  startAudit, isProcessing, logs, result, setView 
 }: any) {
+  
   return (
-    <div className="min-h-screen bg-[#F8FAFC] p-10 text-[#003366] font-sans">
-      <div className="max-w-7xl mx-auto flex justify-between items-center mb-12">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-[#FFD200] rounded-2xl flex items-center justify-center shadow-lg">
-            <Activity className="w-6 h-6 text-[#003366]" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-black uppercase italic tracking-tight">Workspace <span className="text-slate-300 font-light">Aureum</span></h1>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Secure Session: HIPAA-P12</p>
-          </div>
-        </div>
-        <div className="flex gap-4">
-          <button 
-            onClick={() => setView('history')}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-white border border-slate-200 text-[10px] font-black uppercase text-slate-400 hover:text-[#003366] transition-all shadow-sm"
-          >
-            <HistoryIcon className="w-3 h-3 text-[#FFD200]" /> Intelligence Archive
-          </button>
-          <button onClick={onLogout} className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-white border border-slate-200 text-[10px] font-black uppercase text-slate-400 hover:text-red-500 transition-all shadow-sm">
-            <LogOut className="w-3 h-3" /> Terminate Session
-          </button>
-        </div>
+    <div className="max-w-4xl mx-auto space-y-12 py-10">
+      {/* Header Section */}
+      <div className="text-center space-y-2">
+        <h2 className="text-3xl font-black text-[#003366] uppercase italic tracking-tight">Audit Initialization</h2>
+        <p className="text-slate-400 text-sm font-medium uppercase tracking-widest">Global Intelligence Layer // P12 Secure</p>
       </div>
 
-      <div className="max-w-7xl mx-auto grid grid-cols-12 gap-10">
-        <div className="col-span-4 space-y-6">
-          <div className="bg-white p-8 rounded-[35px] shadow-sm border border-slate-100">
-            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-300 mb-8 flex items-center gap-2 italic">
-                <Terminal className="w-3 h-3 text-[#FFD200]"/> Configuration
-            </h3>
-            <div className="space-y-6">
-              <input 
-                type="text" 
-                value={patientId} 
-                onChange={(e) => setPatientId(e.target.value)} 
-                className="w-full p-4 bg-slate-50 border-none rounded-2xl focus:ring-2 ring-[#FFD200] outline-none font-bold text-sm" 
-              />
-              <div className="space-y-4">
-                 <label className="group relative flex items-center gap-4 p-5 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 hover:border-[#FFD200] hover:bg-[#FFD200]/5 cursor-pointer transition-all overflow-hidden">
-                   <input type="file" onChange={(e) => setPolicyFile(e.target.files?.[0])} className="absolute inset-0 opacity-0 cursor-pointer" />
-                   <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
-                     {policyFile ? <FileCheck className="w-5 h-5 text-emerald-500" /> : <FileUp className="w-5 h-5 text-slate-300 group-hover:text-[#FFD200]" />}
-                   </div>
-                   <div className="flex-1">
-                     <p className="text-[10px] font-black uppercase text-slate-400 group-hover:text-[#003366]">Policy Document</p>
-                     <p className="text-xs font-bold text-[#003366] line-clamp-1">
-                       {policyFile ? policyFile.name : "Select PDF Archive"}
-                     </p>
-                   </div>
-                 </label>
+      <div className="bg-white rounded-[40px] shadow-sm border border-slate-100 p-12 space-y-10">
+        {/* Patient Input */}
+        <div className="max-w-md mx-auto">
+          <label className="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em] mb-3 block text-center">Patient Identifier</label>
+          <input 
+            type="text" 
+            value={patientId} 
+            onChange={(e) => setPatientId(e.target.value)} 
+            className="w-full text-center p-4 bg-slate-50 border-none rounded-2xl focus:ring-2 ring-[#FFD200] outline-none font-black text-[#003366] text-xl" 
+          />
+        </div>
 
-                 <label className="group relative flex items-center gap-4 p-5 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 hover:border-[#FFD200] hover:bg-[#FFD200]/5 cursor-pointer transition-all overflow-hidden">
-                   <input type="file" onChange={(e) => setPatientFile(e.target.files?.[0])} className="absolute inset-0 opacity-0 cursor-pointer" />
-                   <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
-                     {patientFile ? <FileCheck className="w-5 h-5 text-emerald-500" /> : <ShieldCheck className="w-5 h-5 text-slate-300 group-hover:text-[#FFD200]" />}
-                   </div>
-                   <div className="flex-1">
-                     <p className="text-[10px] font-black uppercase text-slate-400 group-hover:text-[#003366]">Patient Record</p>
-                     <p className="text-xs font-bold text-[#003366] line-clamp-1">
-                       {patientFile ? patientFile.name : "Secure Data Import"}
-                     </p>
-                   </div>
-                 </label>
+        {/* Simplified Upload Buttons */}
+        <div className="flex justify-center gap-16">
+          <div className="flex flex-col items-center gap-4">
+            <label className="cursor-pointer group relative">
+              <input type="file" className="hidden" onChange={(e) => setPolicyFile(e.target.files?.[0])} />
+              <div className={`w-20 h-20 rounded-full flex items-center justify-center transition-all shadow-lg ${policyFile ? 'bg-emerald-500 text-white' : 'bg-slate-50 text-slate-300 hover:bg-[#FFD200] hover:text-[#003366]'}`}>
+                {policyFile ? <CheckCircle2 size={32} /> : <FileText size={32} />}
               </div>
-              <button 
-                onClick={startAudit} 
-                disabled={isProcessing} 
-                className="w-full bg-[#003366] text-white py-5 rounded-2xl font-black uppercase tracking-widest hover:bg-[#002244] shadow-xl disabled:bg-slate-100 transition-all flex items-center justify-center gap-2"
-              >
-                {isProcessing ? "Processing..." : "Initiate Global Audit"}
-              </button>
-            </div>
+              {policyFile && <div className="absolute -top-1 -right-1 bg-white rounded-full p-1 shadow-sm"><CheckCircle2 className="text-emerald-500 w-4 h-4" /></div>}
+            </label>
+            <span className="text-[10px] font-black uppercase text-slate-400 tracking-tighter">Policy Bulletin</span>
+          </div>
+
+          <div className="flex flex-col items-center gap-4">
+            <label className="cursor-pointer group relative">
+              <input type="file" className="hidden" onChange={(e) => setPatientFile(e.target.files?.[0])} />
+              <div className={`w-20 h-20 rounded-full flex items-center justify-center transition-all shadow-lg ${patientFile ? 'bg-emerald-500 text-white' : 'bg-slate-50 text-slate-300 hover:bg-[#FFD200] hover:text-[#003366]'}`}>
+                {patientFile ? <CheckCircle2 size={32} /> : <FileUp size={32} />}
+              </div>
+              {patientFile && <div className="absolute -top-1 -right-1 bg-white rounded-full p-1 shadow-sm"><CheckCircle2 className="text-emerald-500 w-4 h-4" /></div>}
+            </label>
+            <span className="text-[10px] font-black uppercase text-slate-400 tracking-tighter">Medical Record</span>
           </div>
         </div>
 
-        <div className="col-span-8">
-          <div className="bg-white p-10 rounded-[40px] shadow-sm border border-slate-100 min-h-[600px] flex flex-col relative overflow-hidden">
-             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-300 mb-10 italic">Intelligence Layer Stream</h3>
-             
-             <div className="flex-1 space-y-6 overflow-y-auto max-h-[400px]">
-               {logs.map((log: any, i: number) => (
-                 <div key={i} className="flex gap-4 items-center animate-in slide-in-from-left-4">
-                   <div className="w-1 h-1 rounded-full bg-[#FFD200]" />
-                   <p className="font-mono text-[10px] font-bold text-[#003366]/40 tracking-tight">
-                     [{new Date().toLocaleTimeString([], {hour12: false, second: '2-digit'})}] 
-                     <span className="text-[#003366] uppercase italic font-sans ml-4 font-black">{log.msg}</span>
-                   </p>
-                 </div>
-               ))}
-               <div ref={logEndRef} />
-             </div>
-
-              {/* THE SUMMARY CARD */}
-              {result && result.justification && (
-                <div className="space-y-6">
-                   <div className="mt-10 p-8 bg-[#003366] rounded-[30px] shadow-[0_20px_50px_rgba(0,51,102,0.3)] border-t-4 border-[#FFD200] animate-in slide-in-from-bottom-8 duration-700">
-                      <div className="flex justify-between items-start mb-6">
-                        <h4 className="text-white font-black uppercase italic text-lg tracking-tight">Audit Result Finalized</h4>
-                        {result.requirements && result.requirements.some((r: any) => !r.is_met && (r.is_applicable !== false)) && (
-                          <button 
-                            onClick={() => setView('remediation')}
-                            className="bg-[#FFD200] text-[#003366] px-6 py-2 rounded-xl font-black uppercase text-[10px] tracking-widest hover:scale-105 transition-transform shadow-lg flex items-center gap-2"
-                          >
-                            <Zap className="w-3 h-3" /> View Remediation Plan
-                          </button>
-                        )}
-                      </div>
-                      <div className="bg-white/5 p-6 rounded-2xl border border-white/10 italic">
-                        <p className="text-white/90 text-sm leading-relaxed font-medium">
-                          "{result.justification}"
-                        </p>
-                      </div>
-                   </div>
-                </div>
-              )}
-          </div>
+        {/* Action Button */}
+        <div className="pt-6 flex justify-center">
+          <button 
+            onClick={startAudit} 
+            disabled={isProcessing} 
+            className="group relative px-12 py-5 bg-[#003366] text-white rounded-2xl font-black uppercase tracking-[0.2em] shadow-2xl disabled:bg-slate-100 disabled:text-slate-300 transition-all overflow-hidden"
+          >
+            <div className="relative z-10 flex items-center gap-3">
+              {isProcessing ? <Loader2 className="animate-spin" size={20} /> : <Zap size={20} className="text-[#FFD200]" />}
+              {isProcessing ? "Analyzing Core..." : "Initiate Audit"}
+            </div>
+            {!isProcessing && <div className="absolute inset-0 bg-[#FFD200] translate-y-full group-hover:translate-y-0 transition-transform duration-300" />}
+            {!isProcessing && <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20 text-[#003366]">Execute Engine</div>}
+          </button>
         </div>
       </div>
+
+      {/* Loading State / Results Section */}
+      {isProcessing && (
+        <div className="flex flex-col items-center gap-6 animate-in fade-in duration-1000">
+          <div className="flex gap-2">
+            <div className="w-3 h-3 bg-[#FFD200] rounded-full animate-bounce [animation-delay:-0.3s]" />
+            <div className="w-3 h-3 bg-[#FFD200] rounded-full animate-bounce [animation-delay:-0.15s]" />
+            <div className="w-3 h-3 bg-[#FFD200] rounded-full animate-bounce" />
+          </div>
+          <p className="text-[#003366] font-black uppercase italic text-xs tracking-widest animate-pulse">
+            {logs[logs.length - 1]?.msg || "Syncing with LangGraph Core..."}
+          </p>
+        </div>
+      )}
+
+      {result && !isProcessing && (
+        <div className="bg-[#003366] p-10 rounded-[40px] shadow-2xl border-t-8 border-[#FFD200] animate-in slide-in-from-bottom-10 duration-700">
+           <div className="flex justify-between items-center mb-8">
+             <div className="flex items-center gap-3">
+               <ShieldCheck className="text-[#FFD200] w-8 h-8" />
+               <h3 className="text-white text-2xl font-black uppercase italic tracking-tighter">Evaluation Finalized</h3>
+             </div>
+             <button 
+               onClick={() => setView('solutions')}
+               className="bg-[#FFD200] text-[#003366] px-8 py-3 rounded-xl font-black uppercase text-[11px] tracking-widest hover:scale-105 transition-transform"
+             >
+               Explore Solutions Hub
+             </button>
+           </div>
+           <p className="text-white/80 font-medium leading-relaxed italic border-l-4 border-white/10 pl-6 py-2">
+             "{result.justification}"
+           </p>
+        </div>
+      )}
     </div>
   );
 }
