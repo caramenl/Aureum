@@ -1,5 +1,11 @@
 "use client";
 import React, { useState, useRef, useEffect } from 'react';
+import { 
+  LayoutDashboard, ShieldAlert, History, LogOut, 
+  Activity, Bell, Search, Zap 
+} from 'lucide-react';
+
+// Import your sub-components
 import Home from './home';
 import Login from './login';
 import Audit from './audit';
@@ -7,10 +13,11 @@ import Remediation from './remediation';
 import AuditHistory from './audit-history';
 
 export default function App() {
-  const [view, setView] = useState<'landing' | 'login' | 'workspace' | 'remediation' | 'history'>('landing');
+  const [view, setView] = useState<'landing' | 'login' | 'dashboard'>('landing');
+  const [activeTab, setActiveTab] = useState<'audit' | 'solutions' | 'history'>('audit');
   const [user, setUser] = useState<string | null>(null);
   
-  // Audit & UI States
+  // Shared Audit & Engine States
   const [patientId, setPatientId] = useState('PT-7721');
   const [policyFile, setPolicyFile] = useState<File | undefined>();
   const [patientFile, setPatientFile] = useState<File | undefined>();
@@ -20,26 +27,7 @@ export default function App() {
   
   const logEndRef = useRef<HTMLDivElement>(null);
 
-  // Session Handling
-  useEffect(() => {
-    const savedUser = localStorage.getItem('aureum_user');
-    if (savedUser) {
-      setUser(savedUser);
-      setView('workspace');
-    }
-  }, []);
-
-  const handleLogin = (email: string) => {
-    localStorage.setItem('aureum_user', email);
-    setUser(email);
-    setView('workspace');
-  };
-
-  // Auto-scroll for the terminal logs
-  useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [logs]);
-
+  // Scoped handleStartAudit with result-scoping fix
   const handleStartAudit = async () => {
     if (!policyFile || !patientFile) return alert("Please upload both PDFs.");
 
@@ -69,91 +57,125 @@ export default function App() {
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
-        buffer = lines.pop() || ""; // Save partial line for next chunk
+        buffer = lines.pop() || ""; 
 
         for (const line of lines) {
           if (line.startsWith('data: ')) {
             try {
               const jsonStr = line.replace('data: ', '').trim();
               if (!jsonStr) continue;
-              const payload = JSON.parse(jsonStr);
+              
+              const payload = JSON.parse(jsonStr); // payload is defined here
 
-              // 1. Handle Specialized Messages or Logs
               if (payload.msg) {
                 setLogs(prev => [...prev, { node: payload.node, msg: payload.msg }]);
-              } else {
-                // Mapping node names to user-friendly messages if msg is missing
-                const nodeMessages: Record<string, string> = {
-                  'check_cache': '🔍 Checking Semantic Policy Cache...',
-                  'parse_policy': '📜 Extracting Clinical Rules...',
-                  'redact_pii': '🛡️ Scrubbing PII for Compliance...',
-                  'evaluate_patient': '🧠 Auditing Records vs Policy...',
-                  'critic_verify': '⚖️ Verifying Clinical Groundedness...',
-                  'denial_predictor': '🔮 Predicting Denial Risks...'
+              } else if (payload.node) {
+                const messages: Record<string, string> = {
+                  'check_cache': '🔍 Checking Policy Cache...',
+                  'evaluate_patient': '🧠 Analyzing Clinical Context...',
+                  'critic_verify': '⚖️ Verifying Groundedness...'
                 };
-                setLogs(prev => [...prev, { 
-                  node: payload.node, 
-                  msg: nodeMessages[payload.node] || `Processing ${payload.node}...` 
-                }]);
+                setLogs(prev => [...prev, { node: payload.node, msg: messages[payload.node] || `Processing ${payload.node}...` }]);
               }
 
-              // 2. Capture the Audit Result/Summary (CRITICAL)
+              // FIXED: Payload check is inside the parsing scope
               if (payload.update && payload.update.justification) {
-                console.log("Summary Received:", payload.update.justification);
                 setResult(payload.update);
               }
 
-              // 3. Handle End/Error
               if (payload.node === 'END' || payload.node === 'ERROR') {
                 setIsProcessing(false);
-                if (payload.node === 'END') {
-                  setLogs(prev => [...prev, { node: 'END', msg: '✅ Audit Pipeline Completed.' }]);
-                }
               }
-
-            } catch (e) {
-              console.error("Stream parsing error:", e);
-            }
+            } catch (e) { console.error("Parse error", e); }
           }
         }
       }
     } catch (err) {
-      console.error("Connection Error:", err);
-      setLogs(prev => [...prev, { node: 'ERROR', msg: 'CONNECTION INTERRUPTED' }]);
       setIsProcessing(false);
+      setLogs(prev => [...prev, { node: 'ERROR', msg: 'CONNECTION LOST' }]);
     }
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('aureum_user');
     setUser(null);
-    setLogs([]);
-    setResult(null);
-    setIsProcessing(false);
     setView('landing');
   };
 
-  // View Controller Logic
+  // View Routing
   if (view === 'landing') return <Home onNavigate={() => setView('login')} />;
-  if (view === 'login') return <Login onLogin={handleLogin} />;
-  if (view === 'remediation') return <Remediation result={result} onBack={() => setView('workspace')} />;
-  if (view === 'history') return <AuditHistory onBack={() => setView('workspace')} />;
+  if (view === 'login') return <Login onLogin={(email) => { setUser(email); setView('dashboard'); }} />;
 
   return (
-    <Audit 
-      patientId={patientId}
-      setPatientId={setPatientId}
-      policyFile={policyFile}
-      setPolicyFile={setPolicyFile}
-      patientFile={patientFile}
-      setPatientFile={setPatientFile}
-      startAudit={handleStartAudit}
-      isProcessing={isProcessing}
-      logs={logs}
-      result={result}
-      onLogout={handleLogout}
-      logEndRef={logEndRef}
-      setView={setView}
-    />
+    <div className="flex min-h-screen bg-[#F0F2F5] font-sans">
+      {/* 1. SIDEBAR (Persistent Navigation) */}
+      <aside className="w-64 bg-[#003366] text-white flex flex-col p-6 shadow-2xl">
+        <div className="flex items-center gap-3 mb-12 px-2">
+          <div className="w-10 h-10 bg-[#FFD200] rounded-xl flex items-center justify-center">
+            <Activity className="text-[#003366] w-6 h-6" />
+          </div>
+          <span className="text-xl font-black italic tracking-tighter">AUREUM</span>
+        </div>
+
+        <nav className="flex-1 space-y-2">
+          <button 
+            onClick={() => setActiveTab('audit')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'audit' ? 'bg-white/10 text-[#FFD200] border-l-4 border-[#FFD200]' : 'text-slate-300 hover:bg-white/5'}`}
+          >
+            <LayoutDashboard size={18}/>
+            <span className="text-xs font-bold uppercase tracking-widest">Audit Engine</span>
+          </button>
+          
+          <button 
+            disabled={!result}
+            onClick={() => setActiveTab('solutions')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${!result ? 'opacity-30 cursor-not-allowed' : ''} ${activeTab === 'solutions' ? 'bg-white/10 text-[#FFD200] border-l-4 border-[#FFD200]' : 'text-slate-300 hover:bg-white/5'}`}
+          >
+            <ShieldAlert size={18}/>
+            <span className="text-xs font-bold uppercase tracking-widest">Solutions Hub</span>
+          </button>
+
+          <button 
+            onClick={() => setActiveTab('history')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'history' ? 'bg-white/10 text-[#FFD200] border-l-4 border-[#FFD200]' : 'text-slate-300 hover:bg-white/5'}`}
+          >
+            <History size={18}/>
+            <span className="text-xs font-bold uppercase tracking-widest">History</span>
+          </button>
+        </nav>
+
+        <button onClick={handleLogout} className="mt-auto flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white transition-colors text-[10px] font-black uppercase">
+          <LogOut size={16}/> Terminate Session
+        </button>
+      </aside>
+
+      {/* 2. MAIN CONTENT AREA */}
+      <main className="flex-1 flex flex-col overflow-hidden">
+        <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-10 shadow-sm">
+          <div className="flex items-center gap-4">
+             <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+             <span className="text-[10px] font-black uppercase tracking-tighter text-slate-400">Environment: HIPAA-Secure P12</span>
+          </div>
+          <div className="flex items-center gap-6">
+            <Bell size={18} className="text-slate-400 cursor-pointer" />
+            <div className="h-10 w-10 rounded-full bg-slate-100 border border-slate-200" />
+          </div>
+        </header>
+
+        <div className="flex-1 overflow-y-auto p-10 bg-[#F8FAFC]">
+          {activeTab === 'audit' && (
+            <Audit 
+              patientId={patientId} setPatientId={setPatientId}
+              policyFile={policyFile} setPolicyFile={setPolicyFile}
+              patientFile={patientFile} setPatientFile={setPatientFile}
+              startAudit={handleStartAudit} isProcessing={isProcessing}
+              logs={logs} result={result} logEndRef={logEndRef}
+              setView={setActiveTab} // Links "View Remediation" button to tab switch
+            />
+          )}
+          {activeTab === 'solutions' && <Remediation result={result} onBack={() => setActiveTab('audit')} />}
+          {activeTab === 'history' && <AuditHistory onBack={() => setActiveTab('audit')} />}
+        </div>
+      </main>
+    </div>
   );
 }
