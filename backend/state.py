@@ -9,6 +9,7 @@ class AgentState(TypedDict):
     policy_hash: str
     cached_requirements: Optional[List[AuditRequirement]]
     extracted_requirements: List[AuditRequirement]
+    treatment_history: List[any] # Using any for simplicity in TypedDict if we don't want to import TreatmentEvent here or use its dict form
     final_justification: str
     status: str
     next_step: str

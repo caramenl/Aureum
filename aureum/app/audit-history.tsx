@@ -5,10 +5,21 @@ import {
   ChevronRight, Activity, ShieldCheck, Database 
 } from 'lucide-react';
 
-export default function AuditHistory({ onBack, onSelect }: { onBack: () => void, onSelect: (record: any) => void }) {
-  const [patientId, setPatientId] = useState('PT-7721');
+export default function AuditHistory({ onBack, onSelect, patientId: initialPatientId }: { onBack: () => void, onSelect: (record: any) => void, patientId?: string }) {
+  const [patientId, setPatientId] = useState(initialPatientId || 'PT-7721');
   const [records, setRecords] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+
+  const formatDateTime = (isoString?: string) => {
+    if (!isoString) return { date: 'UNKNOWN', time: 'N/A' };
+    try {
+      const d = new Date(isoString);
+      return {
+        date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase(),
+        time: d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) + ' EST'
+      };
+    } catch { return { date: 'ERROR', time: 'N/A' }; }
+  };
 
   const fetchHistory = async () => {
     setIsLoading(true);
@@ -111,8 +122,8 @@ export default function AuditHistory({ onBack, onSelect }: { onBack: () => void,
                 {/* Timestamp */}
                 <div className="col-span-2 text-center">
                   <div className="flex flex-col items-center">
-                    <span className="text-[10px] font-black text-[#001A33]">MAR 14, 2026</span>
-                    <span className="text-[8px] font-bold text-slate-400 uppercase">02:14:31 EST</span>
+                    <span className="text-[10px] font-black text-[#001A33]">{formatDateTime(record.entry_date).date}</span>
+                    <span className="text-[8px] font-bold text-slate-400 uppercase">{formatDateTime(record.entry_date).time}</span>
                   </div>
                 </div>
 

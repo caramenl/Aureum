@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   LayoutDashboard, ShieldAlert, History, LogOut, 
-  Activity, Bell, Search, Zap 
+  Activity, Bell, Search, Zap, Clock 
 } from 'lucide-react';
 
 import Home from './home';
@@ -10,10 +10,11 @@ import Login from './login';
 import Audit from './audit';
 import Remediation from './remediation';
 import AuditHistory from './audit-history';
+import Timeline from './timeline';
 
 export default function App() {
   const [view, setView] = useState<'landing' | 'login' | 'dashboard'>('landing');
-  const [activeTab, setActiveTab] = useState<'audit' | 'solutions' | 'history'>('audit');
+  const [activeTab, setActiveTab] = useState<'audit' | 'solutions' | 'history' | 'timeline'>('audit');
   const [user, setUser] = useState<string | null>(null);
   
   const [patientId, setPatientId] = useState('PT-7721');
@@ -104,6 +105,13 @@ export default function App() {
             disabled={!result}
           />
           <SidebarButton 
+            icon={<Clock size={18}/>} 
+            label="Patient Timeline" 
+            active={activeTab === 'timeline'} 
+            onClick={() => setActiveTab('timeline')} 
+            disabled={!result}
+          />
+          <SidebarButton 
             icon={<History size={18}/>} 
             label="History" 
             active={activeTab === 'history'} 
@@ -141,8 +149,19 @@ export default function App() {
             <Remediation result={result} onBack={() => setActiveTab('audit')} />
           )}
 
+          {activeTab === 'timeline' && (
+            <Timeline result={result} onBack={() => setActiveTab('audit')} />
+          )}
+
           {activeTab === 'history' && (
-            <AuditHistory onBack={() => setActiveTab('audit')} />
+            <AuditHistory 
+              patientId={patientId}
+              onBack={() => setActiveTab('audit')} 
+              onSelect={(record) => {
+                setResult(record);
+                setActiveTab('solutions');
+              }}
+            />
           )}
         </div>
       </main>

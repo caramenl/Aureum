@@ -12,6 +12,11 @@ class AuditRequirement(BaseModel):
     bridge_action: Optional[str] = Field(None, description="Actionable advice for the user if the requirement is not met")
     is_verified: bool = Field(False, description="Human-in-the-loop validation boolean. Defaults to False.")
     hallucination_risk: bool = Field(False, description="Flagged by Critic Node if evidence snippet is not verbatim in source text")
+class TreatmentEvent(BaseModel):
+    date: str = Field(..., description="ISO or readable date of the treatment/event")
+    description: str = Field(..., description="What treatment or event occurred")
+    status: str = Field(..., description="Outcome or status (e.g., COMPLETED, FAILED, PENDING)")
+    requirement_id: Optional[str] = Field(None, description="Optional link to a specific policy requirement")
 
 class AuditResult(BaseModel):
     patient_id: str
@@ -19,6 +24,7 @@ class AuditResult(BaseModel):
     status: str = Field(..., description="Overall status: APPROVED, DENIED, or PENDING_REVIEW")
     requirements: List[AuditRequirement]
     final_justification: str = Field(..., description="1-paragraph summary of the final AI decision")
+    treatment_history: List[TreatmentEvent] = Field(default_factory=list, description="Chronological list of clinical events extracted from records")
     confidence_score: float = Field(1.0, description="AI confidence score for the overall audit")
     manual_review_required: bool = Field(False, description="Triggered if confidence score is low")
     entry_date: Optional[str] = Field(None, description="ISO timestamp of the audit")

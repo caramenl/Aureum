@@ -62,9 +62,11 @@ async def audit_stream(
             next_step="",
             retry_count=0,
             medical_records_text="",
+            treatment_history=[],
             confidence_score=0.0
         )
         
+        start_time = time.time()
         try:
             current_state = initial_state.copy()
             # Stream Mode: Updates sends partial state as nodes finish
@@ -91,6 +93,8 @@ async def audit_stream(
             reqs = current_state.get("extracted_requirements", [])
             any_denials = any(r.is_met == False and r.is_applicable != False for r in reqs)
             clinical_verdict = "DENIED" if any_denials else "APPROVED"
+            
+            runtime = round(time.time() - start_time, 1)
 
             audit_result_model = AuditResult(
                 patient_id=current_state.get("patient_id", patient_id),
@@ -98,6 +102,7 @@ async def audit_stream(
                 status=clinical_verdict,
                 requirements=reqs,
                 final_justification=current_state.get("final_justification", "Audit finished"),
+                treatment_history=current_state.get("treatment_history", []),
                 confidence_score=current_state.get("confidence_score", 1.0),
                 manual_review_required=current_state.get("confidence_score", 1.0) < 0.7,
                 entry_date=datetime.utcnow().isoformat() + "Z"
@@ -105,6 +110,7 @@ async def audit_stream(
             # Add timestamp to dump for sorting
             result_dump = audit_result_model.model_dump()
             result_dump["_timestamp"] = time.time()  # Epoch for easy sorting
+            result_dump["runtime"] = runtime # Also save runtime in history
             
             # Add to Intelligence Layer Long-Term Memory (BLOCKING to avoid race condition)
             yield f"data: {json.dumps({'node': 'save_history', 'msg': '📦 PERMANENTLY ARCHIVING AUDIT...'})}\n\n"
@@ -114,8 +120,12 @@ async def audit_stream(
                 "node": "END",
                 "update": {
                     "status": clinical_verdict,
+                    "confidence_score": audit_result_model.confidence_score,
+                    "runtime": runtime,
+                    "policy_name": policy_pdf.filename,
                     "req_count": len(audit_result_model.requirements),
                     "justification": audit_result_model.final_justification,
+                    "treatment_history": [t.model_dump() for t in audit_result_model.treatment_history],
                     "requirements": [r.model_dump() for r in audit_result_model.requirements]
                 }
             })

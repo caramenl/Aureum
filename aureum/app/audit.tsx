@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { 
   FileText, UploadCloud, Zap, Loader2, 
   CheckCircle, ShieldCheck, Activity, ClipboardList,
-  Stethoscope, Search, Info
+  Search, Info
 } from 'lucide-react';
 
 export default function Audit({ 
@@ -11,7 +11,7 @@ export default function Audit({
   startAudit, isProcessing, logs, result, setView 
 }: any) {
   
-  const [procedure, setProcedure] = useState('Knee Arthroplasty');
+
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 py-4 animate-in fade-in duration-500">
@@ -56,21 +56,7 @@ export default function Audit({
                 </div>
               </div>
 
-              <div>
-                <label className="text-[9px] font-black text-slate-400 uppercase block mb-2 tracking-tighter">Clinical Procedure</label>
-                <div className="relative">
-                  <Stethoscope className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-300" />
-                  <select 
-                    value={procedure}
-                    onChange={(e) => setProcedure(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 py-3 pl-10 pr-4 text-sm font-bold text-[#001A33] outline-none appearance-none"
-                  >
-                    <option>Knee Arthroplasty</option>
-                    <option>Lumbar Fusion</option>
-                    <option>MRI Brain w/ Contrast</option>
-                  </select>
-                </div>
-              </div>
+
             </div>
           </div>
 
@@ -149,12 +135,12 @@ export default function Audit({
       )}
 
       {/* 4. AI APPROVAL PAGE (Result Section) */}
-      {result && !isProcessing && (
+      {result?.status && !isProcessing && (
         <div className="bg-white border border-slate-200 shadow-2xl animate-in zoom-in-95 duration-500 overflow-hidden">
           {/* Status Color Bar */}
           <div className={`h-2 w-full ${
-            result.decision === 'Approved' ? 'bg-emerald-500' : 
-            result.decision === 'Denied' ? 'bg-rose-500' : 'bg-[#FFD200]'
+            result.status === 'APPROVED' ? 'bg-emerald-500' : 
+            result.status === 'DENIED' ? 'bg-rose-500' : 'bg-[#FFD200]'
           }`} />
           
           <div className="p-10">
@@ -164,17 +150,17 @@ export default function Audit({
                 <div>
                   <label className="text-[10px] font-black text-slate-300 uppercase tracking-widest block mb-2">Coverage Decision</label>
                   <div className={`text-4xl font-black uppercase italic tracking-tighter ${
-                    result.decision === 'Approved' ? 'text-emerald-600' : 
-                    result.decision === 'Denied' ? 'text-rose-600' : 'text-[#001A33]'
+                    result.status === 'APPROVED' ? 'text-emerald-600' : 
+                    result.status === 'DENIED' ? 'text-rose-600' : 'text-[#001A33]'
                   }`}>
-                    {result.decision || 'Analysis Pending'}
+                    {result.status || 'Analysis Pending'}
                   </div>
                 </div>
                 
                 <div className="border-l border-slate-100 pl-12">
-                  <label className="text-[10px] font-black text-slate-300 uppercase tracking-widest block mb-2">Approval Probability</label>
+                  <label className="text-[10px] font-black text-slate-300 uppercase tracking-widest block mb-2">Decision Confidence</label>
                   <div className="text-4xl font-black text-[#001A33] tabular-nums">
-                    {result.probability || '84'}<span className="text-lg ml-0.5">%</span>
+                    {Math.round((result.confidence_score || result.probability || 0) * 100)}<span className="text-lg ml-0.5">%</span>
                   </div>
                 </div>
               </div>
@@ -198,12 +184,12 @@ export default function Audit({
                 </div>
                 <div className="space-y-4">
                   <div className="bg-slate-50 p-4 border-l-4 border-[#001A33]">
-                    <span className="text-[9px] font-black text-slate-400 uppercase block mb-1">Clause Reference</span>
-                    <p className="text-xs font-black text-[#001A33]">{result.clause_used || "SEC 4.2.1: MEDICAL NECESSITY CRITERIA"}</p>
+                    <span className="text-[9px] font-black text-slate-400 uppercase block mb-1">Audit Policy Reference</span>
+                    <p className="text-[10px] font-black text-[#001A33] uppercase line-clamp-1">{result.policy_name || result.clause_used || "SYSTEM ANALYSIS COMPLETE"}</p>
                   </div>
                   <div className="bg-slate-50/50 p-5 border border-slate-100 italic">
                     <p className="text-sm font-medium text-slate-600 leading-relaxed">
-                      "{result.justification}"
+                      "{result.final_justification || result.justification || ""}"
                     </p>
                   </div>
                 </div>
@@ -219,7 +205,7 @@ export default function Audit({
                   <Info className="absolute top-4 right-4 text-emerald-200 w-10 h-10 -rotate-12" />
                   <span className="text-[9px] font-black text-emerald-700 uppercase block mb-3 tracking-tighter">Verified Clinical Excerpt:</span>
                   <p className="text-sm font-bold text-[#001A33] leading-relaxed relative z-10">
-                    {result.evidence_quote || "Clinical documentation confirms failed conservative management for a period exceeding 6 months, supported by physical therapy logs dated 01/12/26."}
+                    {result.evidence_quote || result.requirements?.find((r: any) => r.evidence_snippet)?.evidence_snippet || ""}
                   </p>
                 </div>
                 <div className="p-4 bg-slate-50 flex items-center justify-between">
@@ -235,14 +221,14 @@ export default function Audit({
             </div>
             
             {/* Footer Metadata */}
-            <div className="mt-12 pt-8 border-t border-slate-100 flex justify-between items-center text-[8px] font-bold text-slate-300 uppercase tracking-[0.2em]">
+            <div className="mt-12 pt-8 border-t border-slate-100 flex justify-between items-center text-[10px] font-bold text-slate-300 uppercase tracking-[0.2em]">
               <div className="flex gap-8">
-                <span>Model: Aureum-Grounded-v4.0.1</span>
-                <span>Runtime: 14.2s</span>
-                <span>Session ID: 0x9f...a23</span>
+                <span>Model: Aureum-Grounded-v1</span>
+                <span>Runtime: {result.runtime || 'N/A'}s</span>
+                <span>Case ID: {result.patient_id || 'N/A'}</span>
               </div>
               <div className="flex items-center gap-3">
-                <span className="text-[#001A33] opacity-40">Security Hash: {Math.random().toString(16).slice(2, 10).toUpperCase()}</span>
+                <span className="text-[#001A33] opacity-40">Integrity Check: {result.entry_date ? new Date(result.entry_date).getTime().toString(16).toUpperCase() : 'VERIFIED'}</span>
               </div>
             </div>
           </div>

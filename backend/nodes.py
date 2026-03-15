@@ -95,18 +95,21 @@ def evaluate_patient_node(state: AgentState):
     patient_doc = types.Part.from_bytes(data=state["patient_record_bytes"], mime_type="application/pdf")
     
     prompt = f"""You are an expert insurance auditor. Review the patient record PDF and determine if each policy requirement below is satisfied.
-
-Policy requirements to audit:
-{req_json}
-
-Return a JSON OBJECT with EXACTLY these fields:
-- "updated_requirements": array of requirements. For each, include "requirement_id", "description", "is_met", "page_number", "evidence_snippet", AND "is_applicable" (set to false if the requirement is for a different indication than the patient's diagnosed condition).
-- "final_justification": 2-3 sentence summary of overall audit outcome
-- "confidence_score": number 0.0-1.0
-
-Example format:
-{{"updated_requirements": [{{"requirement_id": "REQ-001", "description": "...", "is_met": true, "page_number": 2, "evidence_snippet": "exact quote from record"}}], "final_justification": "Patient meets X of Y requirements...", "confidence_score": 0.9}}
-Return ONLY the JSON object. No markdown, no explanation."""
+    
+    ALSO: Identify every chronological treatment or clinical event mentioned in the record (e.g., Physical Therapy sessions, Injections, Surgery, Imaging). 
+    
+    Policy requirements to audit:
+    {req_json}
+    
+    Return a JSON OBJECT with EXACTLY these fields:
+    - "updated_requirements": array of requirements. For each, include "requirement_id", "description", "is_met", "page_number", "evidence_snippet", AND "is_applicable".
+    - "treatment_history": array of event objects. Each must have "date", "description", "status", and optional "requirement_id" if it directly relates to a requirement.
+    - "final_justification": 2-3 sentence summary of overall audit outcome
+    - "confidence_score": number 0.0-1.0
+    
+    Example format:
+    {{"updated_requirements": [...], "treatment_history": [{{"date": "2024-01-12", "description": "Physical Therapy - Week 1", "status": "COMPLETED"}}], "final_justification": "...", "confidence_score": 0.9}}
+    Return ONLY the JSON object. No markdown, no explanation."""
     
     # 8B model handles high-volume token processing faster
     response = client.models.generate_content(
@@ -123,8 +126,10 @@ Return ONLY the JSON object. No markdown, no explanation."""
         if raw_text.startswith('```json'):
             raw_text = raw_text.replace('```json\n', '').replace('```', '').strip()
         data = json.loads(raw_text)
+        from models import TreatmentEvent
         return {
             "extracted_requirements": [AuditRequirement(**r) for r in data["updated_requirements"]],
+            "treatment_history": [TreatmentEvent(**t) for t in data.get("treatment_history", [])],
             "final_justification": data["final_justification"],
             "status": "AUDITED",
             "confidence_score": data.get("confidence_score", 0.5),
